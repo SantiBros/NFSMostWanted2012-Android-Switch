@@ -35,7 +35,7 @@ NAME = "NFSMostWanted2012"
 ROOT = os.path.dirname(HERE)
 
 # Without git: the project's own files and folders, minus build output.
-SOURCE_ITEMS = ["CMakeLists.txt", "README.md", "CHANGELOG.md", "THIRD_PARTY.md", "CONTRIBUTING.md", "LICENSE",
+SOURCE_ITEMS = ["CMakeLists.txt", "README.md", "README.es.md", "CHANGELOG.md", "THIRD_PARTY.md", "CONTRIBUTING.md", "LICENSE",
                 ".gitignore", ".gitattributes", ".github", "cmake", "docs", "external/dynarmic", "external/stb",
                 "patches", "res", "src", "tools"]
 # Not packed into source/: the README's pictures (they only matter on GitHub).

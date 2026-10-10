@@ -1,2 +1,5 @@
-# Only the bug report and idea forms: they ask for what is needed to help.
 blank_issues_enabled: false
+contact_links:
+  - name: Installation help and troubleshooting
+    url: https://github.com/SantiBros/NFSMostWanted2012-Android-Switch/blob/main/docs/INSTALL.md#troubleshooting
+    about: The most common problems and how to fix them. Please check here first.

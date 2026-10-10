@@ -2,12 +2,16 @@
 
 <img src="docs/images/banner.jpg" alt="NFS Most Wanted 2012 (Android version) for Nintendo Switch, an unofficial homebrew port" width="100%">
 
+**English** · [Español](README.es.md)
+
 # NFS Most Wanted 2012 (Android) for Nintendo Switch
 
 **An unofficial homebrew port of the Android version of *Need for Speed™ Most Wanted* (2012, version 1.3.128) to the Nintendo Switch.**<br>
-Bring your own copy of the game, drop it into one folder, and race through Fairhaven, handheld or docked.
+The original game, running on your Switch: not a phone emulator. Bring your own copy, drop it into
+one folder, and race through Fairhaven, handheld or docked.
 
-[![Download v0.2.5](https://img.shields.io/badge/download-v0.2.5-e11d2e?style=for-the-badge&logo=github&logoColor=white)](../../releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/SantiBros/NFSMostWanted2012-Android-Switch?style=for-the-badge&label=download&color=e11d2e&logo=github&logoColor=white)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/SantiBros/NFSMostWanted2012-Android-Switch/total?style=for-the-badge&color=2b2f38)](../../releases)
 ![Nintendo Switch homebrew](https://img.shields.io/badge/Nintendo%20Switch-homebrew-2b2f38?style=for-the-badge)
 ![Android version 1.3.128](https://img.shields.io/badge/Android%20version-1.3.128-2b2f38?style=for-the-badge)
 ![Atmosphère](https://img.shields.io/badge/CFW-Atmosph%C3%A8re-2b2f38?style=for-the-badge)
@@ -177,9 +181,13 @@ straight; about 30° of tilt is full lock. All buttons keep working.<br>
 | Gyro steering, custom clocks | 🧪 New, not yet confirmed on many consoles: feedback welcome |
 | Online features (Autolog, leaderboards, EA account, store) | ❌ Not available: the port is offline by design |
 
-Known issues: the very first test build froze a console once (the cause is not known; later
-builds have not done it in testing so far). Docking or undocking during play keeps the resolution the game started with:
-restart it to switch. See the [changelog](CHANGELOG.md) for what changed in each version.
+**Known issues**
+- The very first test build froze a console once (the cause is not known; later builds have not
+  done it in testing so far).
+- Docking or undocking during play keeps the resolution the game started with: restart the game to
+  switch.
+
+See the [changelog](CHANGELOG.md) for what changed in each version.
 
 ## FAQ
 
@@ -220,6 +228,15 @@ files will be closed.
 Version **1.3.128** (package `com.ea.games.nfs13_row`), with the 32-bit libraries
 (`lib/armeabi-v7a`) in the APK. APKs that only have the 64-bit build (`arm64-v8a`) don't work: the
 port tells you so at the first start.
+</details>
+
+<details>
+<summary><b>Does the port go online? Can I get banned?</b></summary>
+
+The port never connects to the internet: every online function of the game is blocked, and it
+doesn't even start the console's network service. Running any homebrew needs custom firmware,
+which is against Nintendo's terms and can get a console banned from Nintendo's online services.
+Running homebrew on an emuMMC and keeping your SD card backed up is the usual advice.
 </details>
 
 <details>
@@ -297,15 +314,6 @@ Standing on the shoulders of others:
 
 Full list with licenses: [THIRD_PARTY.md](THIRD_PARTY.md).
 
-## How it was made: AI use
-
-This port was built by SantiBros together with an AI coding assistant (Claude, by Anthropic). The
-assistant wrote most of the code, tools and documentation under SantiBros's direction; SantiBros
-tested the builds on a real Switch, reported what went wrong and decided what the port should do.
-Changes were checked by running the game: on the PC test build (with automated screenshots and
-logs) and on the console. If you find something that's wrong, please
-[open an issue](../../issues/new/choose).
-
 ## License
 
 The port's own code (`src/`, `tools/`, `res/`, `patches/`) is under the [MIT License](LICENSE).
@@ -327,6 +335,6 @@ without warranty (see [LICENSE](LICENSE)).
 
 <div align="center">
 
-Made by **SantiBros** · If you enjoy it, star the repo and share it ⭐
+A project by **SantiBros** · If you enjoy it, star the repo ⭐ and share it
 
 </div>

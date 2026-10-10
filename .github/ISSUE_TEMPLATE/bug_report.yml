@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for the report! Please **never attach game files** (APK, OBB, `.so` files): reports with game files are deleted.
-        Check the troubleshooting table in `docs/INSTALL.md` first: many problems are solved there.
+        Check the [troubleshooting table](https://github.com/SantiBros/NFSMostWanted2012-Android-Switch/blob/main/docs/INSTALL.md#troubleshooting) first: many problems are solved there.
   - type: input
     id: version
     attributes:
