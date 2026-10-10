@@ -222,6 +222,7 @@ bool gl_should_close() {
         // game's threads are still running.
         LOGI("exit requested: restoring stock clocks and closing");
         clocks_exit();
+        logging::flush();
         std::fflush(nullptr);
         unlock_exit();
         for (;;) svcSleepThread(1000000000ll);
@@ -328,72 +329,7 @@ bool poll_input(InputState& out) {
     return !g_quit;
 }
 
-// ---- audio --------------------------------------------------------------------
-// audout runs at 48 kHz stereo s16; FMOD's rate is upsampled linearly.
-namespace {
-constexpr int kOutRate = 48000;
-constexpr int kBuffers = 4;
-constexpr size_t kBufBytes = 0x4000;  // 4096 stereo frames, 0x1000-aligned size
-AudioOutBuffer g_bufs[kBuffers];
-void* g_mem[kBuffers];
-int g_in_rate = 0;
-bool g_audio_ok = false;
-std::vector<s16> g_pending;  // resampled frames not yet queued
-double g_phase = 0;
-s16 g_last[2] = {0, 0};
-}  // namespace
-
-bool audio_open(int rate, int channels, int) {
-    if (channels != 2) return false;
-    if (R_FAILED(audoutInitialize()) || R_FAILED(audoutStartAudioOut())) {
-        LOGE("audout initialisation failed");
-        return false;
-    }
-    g_in_rate = rate;
-    for (int i = 0; i < kBuffers; i++) {
-        g_mem[i] = aligned_alloc(0x1000, kBufBytes);
-        std::memset(g_mem[i], 0, kBufBytes);
-        g_bufs[i] = AudioOutBuffer{};
-        g_bufs[i].buffer = g_mem[i];
-        g_bufs[i].buffer_size = kBufBytes;
-        g_bufs[i].data_size = kBufBytes;
-        audoutAppendAudioOutBuffer(&g_bufs[i]);  // prime with silence
-    }
-    g_audio_ok = true;
-    return true;
-}
-
-void audio_write(const s16* samples, int frames) {
-    if (!g_audio_ok) return;
-    // linear resample g_in_rate -> 48 kHz
-    const double step = (double)g_in_rate / kOutRate;
-    for (;;) {
-        int i = (int)g_phase;
-        if (i >= frames) break;
-        double t = g_phase - i;
-        for (int c = 0; c < 2; c++) {
-            s16 a = i == 0 ? g_last[c] : samples[(i - 1) * 2 + c];
-            s16 b = samples[i * 2 + c];
-            g_pending.push_back((s16)(a + (b - a) * t));
-        }
-        g_phase += step;
-    }
-    g_phase -= frames;
-    g_last[0] = samples[(frames - 1) * 2];
-    g_last[1] = samples[(frames - 1) * 2 + 1];
-
-    const size_t per_buf = kBufBytes / sizeof(s16);
-    while (g_pending.size() >= per_buf) {
-        AudioOutBuffer* released = nullptr;
-        u32 count = 0;
-        audoutWaitPlayFinish(&released, &count, UINT64_MAX);  // blocks: paces the mixer
-        if (!released) continue;
-        std::memcpy(released->buffer, g_pending.data(), kBufBytes);
-        released->data_size = kBufBytes;
-        audoutAppendAudioOutBuffer(released);
-        g_pending.erase(g_pending.begin(), g_pending.begin() + per_buf);
-    }
-}
+// Sound output: audio_switch.cpp.
 
 // ---- clocks ---------------------------------------------------------------------
 // CPU / GPU / memory clocks through clkrst (8.0.0+) or pcv (older), the same

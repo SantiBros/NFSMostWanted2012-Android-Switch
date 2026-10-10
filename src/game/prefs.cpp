@@ -116,6 +116,12 @@ void save() {
                  "mem_clock=%s\n"
                  "# Frame rate counter: off, fps or full.\n"
                  "overlay=%s\n"
+                 "\n"
+                 "# Sound volume in percent (50-100): the volume of the game's sound mix. The game\n"
+                 "# mixes so loud that loud moments are cut off (a harsh crackle); a lower value\n"
+                 "# leaves room for them. Turn the console's volume up instead.\n"
+                 "sound_volume=%d\n"
+                 "\n"
                  "# Run the game's graphics calls on their own CPU core (next start).\n"
                  "gl_thread=%s\n"
                  "# Switch: translated game code reads and writes its memory directly instead of\n"
@@ -124,7 +130,7 @@ void save() {
                  v.gyro_steering ? "on" : "off", v.gyro_max_angle, v.gyro_invert ? "on" : "off",
                  v.fps_limit ? std::to_string(v.fps_limit).c_str() : "off", v.vsync ? "on" : "off", v.scene_scale,
                  quality_text(v.quality), clock_text(v.cpu_khz).c_str(), clock_text(v.gpu_khz).c_str(),
-                 clock_text(v.mem_khz).c_str(), overlay_text(v.overlay), v.gl_thread ? "on" : "off",
+                 clock_text(v.mem_khz).c_str(), overlay_text(v.overlay), v.sound_volume, v.gl_thread ? "on" : "off",
                  v.direct_memory ? "on" : "off");
     std::fclose(f);
 }
@@ -138,7 +144,7 @@ void load() {
         g_startup = v;
         return;
     }
-    bool has_perf = false;
+    bool has_perf = false, has_sound = false;
     char line[256];
     while (std::fgets(line, sizeof line, f)) {
         char key[64] = {}, val[64] = {};
@@ -157,6 +163,10 @@ void load() {
         else if (!std::strcmp(key, "gpu_clock")) v.gpu_khz = parse_clock(val, true);
         else if (!std::strcmp(key, "mem_clock")) v.mem_khz = parse_clock(val, false);
         else if (!std::strcmp(key, "overlay")) v.overlay = parse_overlay(val);
+        else if (!std::strcmp(key, "sound_volume")) {
+            v.sound_volume = std::clamp(std::atoi(val), 50, 100);
+            has_sound = true;
+        }
         else if (!std::strcmp(key, "gl_thread")) v.gl_thread = parse_bool(val);
         else if (!std::strcmp(key, "direct_memory")) v.direct_memory = parse_bool(val);
     }
@@ -164,7 +174,7 @@ void load() {
     v.cpu_khz = snap(v.cpu_khz, {1020000, 1224000, 1428000, 1581000, 1785000});
     v.gpu_khz = snap(v.gpu_khz, {307200, 384000, 460800, 614400, 768000});
     v.mem_khz = snap(v.mem_khz, {1331200, 1600000});
-    if (!has_perf) save();  // older file (gyro only): add the performance section
+    if (!has_perf || !has_sound) save();  // older file: add the settings it does not have yet
     g_startup = v;
     LOGI("settings: fps limit %s, vsync %s, 3D resolution %d%%, quality %s, clocks cpu %s gpu %s mem %s",
          v.fps_limit ? std::to_string(v.fps_limit).c_str() : "off", v.vsync ? "on" : "off", v.scene_scale,

@@ -29,7 +29,8 @@ FEATURES
   * The whole game is playable with the controller: driving, and every menu
     with a highlight you move with the D-pad. The touch screen still works.
   * Optional gyro steering: tilt the console or controller like a wheel.
-  * Debug menu (ZL + ZR + Minus) with performance settings and an FPS counter.
+  * Debug menu (ZL + ZR + Minus) with performance settings, the sound volume
+    and an FPS counter.
   * Online services are blocked: the game runs fully offline.
   * Your progress is kept in save/ and survives updates of the port.
 
@@ -184,6 +185,16 @@ TROUBLESHOOTING
       holds the frame rate back (game code, graphics driver or GPU). Raising
       the CPU clock in the debug menu helps when it says "game code".
 
+  Short stutters although the counter shows 30
+      The "perf:" lines in log.txt count them ("hitches") and show how long
+      the game waited for the SD card ("game waited"). Please send log.txt
+      with a report. A slow or nearly full SD card makes them worse.
+
+  The sound crackles
+      Lower the Sound volume in the debug menu (70% is the default; 100% is
+      the game's full mix, which crackles at loud moments). If the sound
+      breaks up instead, log.txt counts the "dropouts": please send it.
+
   The console freezes
       Wait a moment and try to close the game from the HOME menu before you
       hold the power button: forcing the console off while it writes to the SD
@@ -194,6 +205,21 @@ When you report a problem, attach log.txt from this folder.
 
 WHAT'S NEW
 ----------
+0.2.6
+  * Fewer short stutters while the counter shows 30 FPS. The game's data
+    file (the OBB) is now read through a memory cache in big blocks instead
+    of thousands of small reads from the SD card, with the next blocks read
+    ahead in the background, and log.txt is written in the background.
+  * The sound no longer breaks up when the graphics are busy: the game's
+    sound mixing now has a CPU core where it comes first.
+  * New setting: Sound volume (debug menu, default 70%). The game mixes so
+    loud that loud moments are cut off and crackle; 70% leaves room for them.
+    Turn the console's volume up instead.
+  * Cleaner sound (a proper filter for the 24 to 48 kHz conversion) with
+    half the delay.
+  * The "perf:" line in log.txt now counts stutters ("hitches") and shows the
+    data cache and the sound.
+
 0.2.5
   * Easy install: copy your APK and OBB (or one .xapk file) into the game
     folder and start the port. At the first start it takes the libraries and

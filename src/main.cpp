@@ -177,6 +177,7 @@ int main(int argc, char** argv) {
         }
     }
     game::fixes::apply();
+    game::audio::install();  // sound volume
     game::native::apply();  // native versions of the game's hottest OBB-reading code
     game::ui::init();  // controller navigation for the touch menus
     elf::run_initializers();
@@ -238,6 +239,7 @@ int main(int argc, char** argv) {
     for (int frame = 1; S.max_frames == 0 || frame <= S.max_frames; frame++) {
         game::perf::frame_begin();
         game::fixes::frame();
+        game::audio::frame();
         if (!S.size_forced && frame % 30 == 0) {
             int want_w = S.width, want_h = S.height;
             platform::preferred_display_size(want_w, want_h);
@@ -364,6 +366,7 @@ int main(int argc, char** argv) {
     cpu::dump_threads();
     LOGI("network calls refused during this run: %u", hle::blocked_network_attempts());
     LOGI("done");
+    logging::flush();
     std::fflush(nullptr);
     std::_Exit(0);
 }

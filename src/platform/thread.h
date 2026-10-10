@@ -12,7 +12,8 @@ struct ThreadHandle;
 ThreadHandle* spawn_thread(std::function<void()> fn, size_t stack_size = 1 << 20, int core = -1);
 void join_thread(ThreadHandle* t);    // waits and frees the handle
 // Raise the calling thread's priority above the game's worker threads
-// (Switch: so the GL thread is not held up by them on its core).
+// (Switch: so the GL thread and the sound mixer are not held up by them on
+// their cores).
 void boost_current_thread();
 // Keep the game's worker threads off this core from now on (Switch: the GL
 // thread gets core 2 to itself; the game's threads then use core 1).

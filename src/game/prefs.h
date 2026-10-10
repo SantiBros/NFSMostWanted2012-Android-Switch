@@ -37,6 +37,10 @@ struct Values {
     int gpu_khz = kClockStock;
     int mem_khz = kClockStock;
     int overlay = kOverlayOff;
+    // FMOD master volume in percent (50-100). At 100 the game's mix goes past
+    // the 16-bit limit at loud moments (up to 1.8x full scale in a race) and is
+    // cut off; at 70 it hardly ever does.
+    int sound_volume = 70;
     bool gl_thread = true;   // run GL calls on their own thread (takes effect at start-up)
     bool direct_memory = true;  // Switch JIT: direct guest memory access (start-up)
 };

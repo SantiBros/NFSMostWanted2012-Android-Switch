@@ -23,6 +23,9 @@ extern int g_min_level;
 extern bool g_to_stderr;  // off while a text screen shows stderr (Switch console)
 void write(Level lvl, const char* tag, const char* fmt, ...) __attribute__((format(printf, 3, 4)));
 void vwrite(Level lvl, const char* tag, const char* fmt, va_list ap);
+// Write the lines logged so far to the log file now (they are otherwise
+// written by a background thread, at least once a second).
+void flush();
 }  // namespace logging
 
 #define LOGV(...) ::logging::write(::logging::Verbose, "loader", __VA_ARGS__)

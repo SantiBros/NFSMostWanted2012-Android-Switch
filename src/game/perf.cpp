@@ -8,8 +8,10 @@
 #include <string>
 #include <thread>
 
+#include "game/audio.h"
 #include "game/overlay.h"
 #include "game/prefs.h"
+#include "hle/file_cache.h"
 #include "hle/gl_queue.h"
 #include "hle/hle.h"
 #include "platform/platform.h"
@@ -43,6 +45,7 @@ bool g_have_clocks = false;
 struct LogWindow {
     double secs = 0, frames = 0, tick = 0, gl_busy = 0, gl_wait = 0, swap = 0, calls = 0, worst = 0;
     int windows = 0;
+    int hitches = 0;  // frames 1.5x longer than the target (what an average fps hides)
 } g_log;
 void log_summary() {
     const LogWindow& w = g_log;
@@ -63,11 +66,14 @@ void log_summary() {
     else if (busy > 0.85) limited_by = "GL driver (CPU, core 2): a higher CPU clock helps";
     else if (swap_ms > 0.4 * frame_ms) limited_by = "GPU: a higher GPU clock helps";
     else limited_by = "mixed";
-    LOGI("perf: %.1f fps (frame %.1f ms, slowest %.0f ms) | game %.1f ms/frame | GL thread %.0f%% busy, waited %.1f "
-         "ms/frame, swap %.1f ms/frame | %.0f GL calls | %s %dx%d, detail %s, limit %s, vsync %s | %s | %s",
-         fps, frame_ms, w.worst, game_ms, 100 * busy, w.gl_wait / w.windows, swap_ms, w.calls / w.windows,
+    std::string extra;
+    for (const std::string& part : {hle::filecache::summary(), audio::summary()})
+        if (!part.empty()) extra += " | " + part;
+    LOGI("perf: %.1f fps (frame %.1f ms, slowest %.0f ms, %d hitches) | game %.1f ms/frame | GL thread %.0f%% busy, "
+         "waited %.1f ms/frame, swap %.1f ms/frame | %.0f GL calls | %s %dx%d, detail %s, limit %s, vsync %s | %s | %s%s",
+         fps, frame_ms, w.worst, w.hitches, game_ms, 100 * busy, w.gl_wait / w.windows, swap_ms, w.calls / w.windows,
          g_docked ? "docked" : "handheld", g_screen_w, g_screen_h, tier_name(startup_tier()),
-         limit ? std::to_string(limit).c_str() : "off", p.vsync ? "on" : "off", clocks, limited_by);
+         limit ? std::to_string(limit).c_str() : "off", p.vsync ? "on" : "off", clocks, limited_by, extra.c_str());
 }
 
 // Thresholds of the game's tier choice (libapp.so, function at 0x547B40):
@@ -204,6 +210,8 @@ void frame_end() {
     if (g_have_last) {
         double ms = std::chrono::duration<double, std::milli>(now - g_last_end).count();
         g_win_worst = std::max(g_win_worst, ms);
+        const int limit = prefs::get().fps_limit;
+        if (ms > 1.5 * 1000.0 / (limit > 0 ? limit : 30)) g_log.hitches++;
     } else {
         g_win_start = now;
     }

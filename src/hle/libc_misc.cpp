@@ -460,6 +460,7 @@ void h_log_assert(u32 cond, u32 tag, u32 fmt, abi::VarArgs va) {
 [[noreturn]] void guest_exit(int code) {
     LOGI("guest exit(%d)", code);
     if (cpu::current_or_null()) run_atexit(0);
+    logging::flush();
     std::fflush(nullptr);
     std::_Exit(code);
 }

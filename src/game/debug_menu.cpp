@@ -185,6 +185,16 @@ void build_items() {
               "table. Turn it off only if the game crashes.";
     g_items.push_back(dm);
 
+    Item snd{Kind::Setting, "Sound volume"};
+    snd.field_int = &Values::sound_volume;
+    for (int pct : {100, 90, 80, 70, 60, 50})
+        snd.choices.push_back({pct, std::to_string(pct) + "%",
+                               pct > 70 ? "Loud moments are cut off and crackle (more the higher)." : ""});
+    snd.help = "Volume of the game's sound mix. The game mixes so loud that loud moments (engines, crashes, "
+               "music) are cut off and crackle; a lower value leaves room for them. Turn the console's volume up "
+               "instead.";
+    g_items.push_back(snd);
+
     Item ov{Kind::Setting, "Frame-rate counter"};
     ov.field_int = &Values::overlay;
     ov.choices = {{prefs::kOverlayOff, "Off", ""}, {prefs::kOverlayFps, "FPS", ""}, {prefs::kOverlayFull, "Full", ""}};
@@ -193,7 +203,7 @@ void build_items() {
 
     Item rs{Kind::Restore, "Restore recommended settings"};
     rs.help = "30 FPS with VSync, full 3D resolution, stock clocks, detail level Medium, GL on its own core, "
-              "direct memory access, counter off.";
+              "direct memory access, sound volume 70%, counter off.";
     g_items.push_back(rs);
 
     Item cl{Kind::Close, "Close"};
@@ -253,7 +263,7 @@ void activate(Item& it) {
     case Kind::Restore: {
         auto& v = prefs::get();
         Values d = prefs::defaults();
-        // Only the performance part; gyro steering stays as it is.
+        // Performance and sound; gyro steering stays as it is.
         v.fps_limit = d.fps_limit;
         v.vsync = d.vsync;
         v.scene_scale = d.scene_scale;
@@ -262,6 +272,7 @@ void activate(Item& it) {
         v.gpu_khz = d.gpu_khz;
         v.mem_khz = d.mem_khz;
         v.overlay = d.overlay;
+        v.sound_volume = d.sound_volume;
         v.gl_thread = d.gl_thread;
         v.direct_memory = d.direct_memory;
         prefs::save();

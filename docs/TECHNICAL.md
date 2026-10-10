@@ -113,16 +113,38 @@ driver for roughly 4,000–5,000 GL calls. What the loader does about it:
   Dynarmic option now skips that (`NFSMW_FP_FLAGS=1` restores it for comparisons).
 - **Medium detail level** by default (see the debug menu notes): about 18 % less game code
   and a quarter fewer GL calls than Highest.
+- **OBB read cache** (`src/hle/file_cache.cpp`, 0.2.6). The game reads the OBB through stdio in
+  small pieces: a few bytes to 12 KiB at a time, each after a seek, from its main thread and two
+  streaming threads. On the Switch each read was a request to the SD card (newlib's `FILE`
+  buffer is only 1 KiB), so a burst of them was a frame that took too long while the average
+  still said 30 fps. The OBB is now opened as a `FILE*` (`fopencookie`) that reads from a
+  shared cache of 128 KiB blocks (128 MiB, least recently used blocks dropped). A stream that
+  reads forward from block to block gets the following blocks read by a background thread,
+  1 block ahead at first and up to 8 (1 MiB) as it keeps going. In a desktop test run (start-up
+  and a race): 12,491 reads and 17,005 seeks on the card before; 869 block reads after, 724 of
+  them by the read-ahead thread, so the game's own threads read only 145 blocks themselves.
+  `NFSMW_NO_OBB_CACHE=1` turns it off for comparisons, `NFSMW_OBB_TRACE=1` logs every block
+  read.
+- **Log written in the background** (`src/core/log.cpp`, 0.2.6). Every line of `log.txt` was
+  written and flushed to the SD card by the thread that logged it, usually the game's main
+  thread (the game prints bursts of warnings when its HUD animates). Lines now collect in memory
+  and a background thread writes them at least once a second; errors, `fatal()` and the exit
+  paths flush at once.
 
 What remains is the game's own code, translated: about 3 million ARM instructions per frame
 in a race (Low detail saves only about 5 % of that; it mostly saves GL calls).
-`log.txt` gets a summary every 10 seconds (frame rate, slowest frame, game time per frame,
-GL thread load, resolution, detail level, clocks), so a console's numbers come back with the
-log:
-`perf: 27.3 fps (frame 36.6 ms, slowest 52 ms) | game 31.2 ms/frame | GL thread 64% busy, waited 2.1
-ms/frame, swap 4.0 ms/frame | ... | game code (CPU, core 0): a higher CPU clock helps`.
-The last part names what holds the frame rate back: the game's code (main thread), the GL
-driver (GL thread), or the GPU (time spent in the buffer swap waiting for it).
+`log.txt` gets a summary every 10 seconds (frame rate, slowest frame, hitches, game time per
+frame, GL thread load, resolution, detail level, clocks, the OBB cache and the sound), so a
+console's numbers come back with the log:
+`perf: 27.3 fps (frame 36.6 ms, slowest 52 ms, 2 hitches) | game 31.2 ms/frame | GL thread 64% busy,
+waited 2.1 ms/frame, swap 4.0 ms/frame | ... | game code (CPU, core 0): a higher CPU clock helps |
+OBB cache: 108 MiB, 2704 block lookups (95% in memory), 869 card reads (108.6 MiB, 724 read ahead,
+1157 ms), game waited 494 ms | sound: mixing 1.0 ms per 42.7 ms of sound, 0 dropouts, 171 ms queued`.
+The part after the clocks names what holds the frame rate back: the game's code (main
+thread), the GL driver (GL thread), or the GPU (time spent in the buffer swap waiting for
+it). A hitch is a frame that took more than 1.5 times as long as it should (50 ms at 30 fps):
+what an average frame rate hides. "Game waited" is the time the game's threads spent waiting
+for the SD card since the start.
 The defaults therefore leave all clocks at stock. If the frame-rate counter shows the game
 below 30 fps on a console, the debug menu can raise the CPU clock (1224 MHz is a clock some
 Switch games use themselves). These numbers come from the desktop build; real hardware will
@@ -190,6 +212,36 @@ The choice is saved in `settings.ini` in the port's folder (together with the de
 be used with a gamepad connected; it only asks you to disconnect it. That is why the loader
 does the tilt steering itself (`src/game/motion.cpp`).
 
+## Sound
+
+FMOD Ex mixes the game's sound in the game's own (translated) code. On Android its Java helper
+`org.fmod.FMODAudioDevice` calls `fmodProcess()` for each block of samples and writes it to an
+`AudioTrack`; `src/game/audio.cpp` runs the same loop and writes to the platform's output.
+FMOD mixes at 24 kHz, 1024 frames (42.7 ms) per call.
+
+- **Thread** (0.2.6): on the Switch the loop runs on core 1 at a priority above the game's
+  worker threads. In 0.2.5 it ran on core 2 below the GL thread, which has that core first,
+  so whenever the GL thread was busy the mixing waited and the sound broke up. Mixing takes
+  about 1 ms per 42.7 ms block on the desktop test machine; the `sound:` part of the `perf:`
+  line gives the console's figure.
+- **Output** (`src/platform/audio_switch.cpp`, 0.2.6): each block is converted to 48 kHz and
+  queued as one 2048-frame `audout` buffer. The queue starts 4 buffers deep (171 ms: how far
+  the sound runs behind the game; 0.2.5 kept 4 buffers of twice the size, 341 ms). If the
+  output ever runs dry (a dropout: the mixer was late) the queue keeps one buffer more from
+  then on, up to 8. Dropouts are counted in the log; a pause of the mixer (the game stopping
+  its sound) is not counted.
+- **Conversion** (`src/platform/resampler.h`, 0.2.6): a 32-tap windowed-sinc (Kaiser)
+  interpolator instead of straight-line interpolation, whose mirror images of the high
+  frequencies came out only 12–20 dB down (now below −90 dB).
+- **Sound volume** (0.2.6): the game's mix is loud enough to go past the 16-bit limit, where
+  FMOD cuts it off: in a recorded test race about 0.4 % of all samples, up to 2.8 % in the
+  loudest ten seconds, with peaks 1.8 times full scale. The loader hooks
+  `FMOD_System_Create` to learn the FMOD system and sets the volume of its master channel
+  group (applied on the main thread between frames, so never in the middle of the game's
+  own FMOD calls). At the default 70 % the same race clips in 0.001 % of samples. The value is
+  `sound_volume` in `settings.ini` and in the debug menu; `NFSMW_SOUND_VOLUME` overrides it
+  for tests.
+
 ## Debug menu (performance settings)
 
 Hold **ZL + ZR** and press **Minus** (the order does not matter) to open the port's own menu.
@@ -214,6 +266,7 @@ change is visible right away. Changes are saved immediately to `settings.ini` in
 | Detail level | highest / high / medium / low | **medium** | The game's own detail tier. Applies the next time the game starts. |
 | GL on its own core | on / off | **on** | The GL thread described under [Performance](#performance). Applies at the next start. |
 | Direct memory access | on / off | **on** | Switch only: the JIT accesses guest memory directly. Turn it off if the game crashes. Next start. |
+| Sound volume | 100 % – 50 % | **70 %** | Volume of the game's mix before it is turned into 16-bit samples (see [Sound](#sound)). Above 70 % loud moments crackle. |
 | Frame-rate counter | off / FPS / full | off | Top-left corner. Full adds frame times, GL calls, clocks and resolution. |
 
 "Restore recommended settings" puts all of these back to the defaults above. Values that make
@@ -293,14 +346,16 @@ README.md, CHANGELOG.md, THIRD_PARTY.md, CONTRIBUTING.md, LICENSE
 docs/           install guide, these notes, building; images/ for the README
 .github/        issue and pull request templates
 src/
-  core/         guest memory + heap, ELF loader, Dynarmic CPU threads, host-call thunks
-  hle/          libc/libm/pthread/GLES2/Android APIs (GL thread: gl_queue), fake JNI + Java classes
+  core/         guest memory + heap, ELF loader, Dynarmic CPU threads, host-call thunks, log
+  hle/          libc/libm/pthread/GLES2/Android APIs (GL thread: gl_queue; OBB cache: file_cache),
+                fake JNI + Java classes
   game/         NFS-specific config, the port's folder layout (paths), first-start setup from the
                 player's APK (setup), controls (MOGA), gyro
                 steering (motion), controller menu navigation (ui_nav, overlay), debug menu
                 (debug_menu), performance settings (perf, prefs = settings.ini), fixes for game
                 bugs, native versions of hot game code (native), FMOD audio pump
-  platform/     Linux (desktop) and Switch backends
+  platform/     Linux (desktop) and Switch backends (Switch sound output: audio_switch,
+                with the 24 to 48 kHz converter in resampler.h)
 tools/
   prepare_sd.py     fills the port's game/ folder from a player's APK and OBB
   make_release.py   packs the port, prepare_sd.py and the source into one release zip

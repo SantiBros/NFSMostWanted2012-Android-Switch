@@ -5,6 +5,7 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "hle/file_cache.h"
 #include "hle/hle.h"
 
 namespace hle {
@@ -313,9 +314,17 @@ int write_out(FILE* f, const std::string& s) {
     return (int)std::fwrite(s.data(), 1, s.size(), f);
 }
 
+// Read-only opens of the game's data file go through the in-memory block
+// cache (hle/file_cache.h): the game reads it in thousands of small pieces.
+bool use_cache(const std::string& host_path, const char* mode) {
+    if (std::strpbrk(mode, "wa+") || std::getenv("NFSMW_NO_OBB_CACHE")) return false;
+    return host_path.size() > 4 && host_path.compare(host_path.size() - 4, 4, ".obb") == 0;
+}
+
 u32 h_fopen(u32 path, u32 mode) {
     std::string hp = map_path(str(path));
-    FILE* f = std::fopen(hp.c_str(), str(mode));
+    FILE* f = use_cache(hp, str(mode)) ? hle::filecache::open(hp) : nullptr;
+    if (!f) f = std::fopen(hp.c_str(), str(mode));
     if (!f) {
         set_errno_from_host();
         LOGD("fopen(%s, %s) failed: %s", str(path), str(mode), std::strerror(errno));

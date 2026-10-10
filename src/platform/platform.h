@@ -105,8 +105,16 @@ enum : unsigned {
 bool poll_input(InputState& out);
 
 // Audio: interleaved signed 16-bit PCM. audio_write blocks while the output
-// queue is full, which paces the caller in real time.
+// queue is full, which paces the caller in real time. audio_pause tells the
+// output that the mixer has stopped for a while (an empty queue is then not a
+// dropout). Switch: audio_switch.cpp.
 bool audio_open(int rate, int channels, int buffer_frames);
 void audio_write(const s16* samples, int frames);
+void audio_pause();
+struct AudioStats {
+    u32 dropouts = 0;  // times the output ran dry since the start
+    int queue_ms = 0;  // sound queued ahead of the speakers
+};
+AudioStats audio_stats();
 
 }  // namespace platform

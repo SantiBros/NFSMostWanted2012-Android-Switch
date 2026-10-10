@@ -393,8 +393,13 @@ void audio_write(const s16* samples, int frames) {
     }
     // pace like a real device
     g_audio_clock += std::chrono::microseconds((long long)frames * 1000000 / g_rate);
+    const auto now = std::chrono::steady_clock::now();
+    if (g_audio_clock < now - std::chrono::milliseconds(200)) g_audio_clock = now;  // after a pause: no catching up
     std::this_thread::sleep_until(g_audio_clock);
 }
+
+void audio_pause() {}
+AudioStats audio_stats() { return {}; }
 
 }  // namespace platform
 

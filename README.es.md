@@ -83,7 +83,7 @@ propio juego para manejar con control.</sub>
 - **Tu partida en un solo archivo** (`save/progress/nfstr_save.sb`): fácil de respaldar, y se
   conserva al actualizar.
 - **Menú de depuración** (ZL + ZR + Menos): límite de FPS, VSync, resolución 3D, nivel de detalle,
-  relojes de CPU / GPU / memoria y contador de FPS.
+  relojes de CPU / GPU / memoria, volumen del sonido y contador de FPS.
 - **Dos cierres inesperados del juego original, corregidos** en el port.
 
 ## Qué necesitas
@@ -106,7 +106,7 @@ propio juego para manejar con control.</sub>
 <img src="docs/images/install-steps.es.png" alt="Instalar en 4 pasos: descarga el zip, copia la carpeta switch a la SD, agrega tu APK y tu OBB a la carpeta game, abre con R + cualquier juego" width="100%">
 
 1. **Descarga.** En la página de [Releases](../../releases), en la sección **Assets**,
-   descarga `NFSMostWanted2012-0.2.5.zip` (no "Source code", que es solo para desarrolladores) y
+   descarga `NFSMostWanted2012-0.2.6.zip` (no "Source code", que es solo para desarrolladores) y
    descomprímelo en tu computadora.
 2. **Copia a la SD.** Copia la carpeta `switch` del zip a la raíz de tu tarjeta SD.
 3. **Agrega tu juego.** Copia tu APK y tu OBB en `switch/NFSMostWanted2012/game/`. No los
@@ -126,7 +126,7 @@ propio juego para manejar con control.</sub>
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.2.5.nro   el port
+├── NFSMostWanted2012-0.2.6.nro   el port
 ├── README.txt                    la guía del jugador (en inglés)
 ├── LICENSES.txt                  componentes de código abierto y sus licencias
 ├── game/                         TUS archivos del juego (nunca los compartas)
@@ -197,7 +197,7 @@ recta; unos 30° de inclinación es el giro máximo. Todos los botones siguen fu
 | Música y efectos de sonido | ✅ Funciona |
 | Partidas guardadas (se conservan al actualizar) | ✅ Funciona |
 | 720p portátil / 1080p en el dock | ✅ Funciona (la resolución se elige al abrir el juego) |
-| FPS | ⚠️ Todavía en ajuste en consola real: el juego apunta a 30 FPS, y en carreras con mucha acción puede bajar de eso con los relojes de fábrica. El menú de depuración permite subir el reloj de la CPU. |
+| FPS | ⚠️ Todavía en ajuste en consola real: el juego apunta a 30 FPS, y en carreras con mucha acción puede bajar de eso con los relojes de fábrica. El menú de depuración permite subir el reloj de la CPU. La 0.2.6 quita las causas principales de los tirones cortos (leer los datos del juego y el log desde la tarjeta SD). |
 | Giroscopio, relojes personalizados | 🧪 Nuevo, aún sin confirmar en muchas consolas: se agradecen comentarios |
 | Funciones en línea (Autolog, clasificaciones, cuenta EA, tienda) | ❌ No disponibles: el port no usa internet a propósito |
 
@@ -283,6 +283,16 @@ líneas `perf:` en un issue ayuda a mejorar el port.
 </details>
 
 <details>
+<summary><b>El sonido cruje. ¿Qué puedo hacer?</b></summary>
+
+El juego mezcla su sonido tan fuerte que los momentos fuertes se cortan, y eso suena como un
+crujido. Desde la 0.2.6 el port baja la mezcla al 70% por defecto; puedes cambiarlo en *Sound volume*
+(volumen del sonido) en el menú de depuración (ZL + ZR + Menos). Sube el volumen de la consola en su
+lugar. Si el sonido se entrecorta o se detiene un momento, repórtalo con `log.txt`: ahí se cuentan
+esos cortes ("dropouts").
+</details>
+
+<details>
 <summary><b>¿Cómo reporto un error?</b></summary>
 
 Abre un [issue](../../issues/new/choose) y adjunta `log.txt` de la carpeta del port. Ahí está lo que
@@ -315,7 +325,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-El resultado es `build-switch/NFSMostWanted2012-0.2.5.nro`. Los detalles están en
+El resultado es `build-switch/NFSMostWanted2012-0.2.6.nro`. Los detalles están en
 [docs/BUILDING.md](docs/BUILDING.md) (en inglés).
 
 ## Créditos

@@ -78,7 +78,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 - **Fully offline.** Every online service is blocked; career, races, cars and saves work offline.
 - **Your career in one file** (`save/progress/nfstr_save.sb`): easy to back up, kept across updates.
 - **Debug menu** (ZL + ZR + Minus): frame-rate limit, VSync, 3D resolution, detail level, CPU / GPU /
-  memory clocks and a frame-rate counter.
+  memory clocks, sound volume and a frame-rate counter.
 - **Two crashes of the original game fixed** in the loader.
 
 ## What you need
@@ -100,7 +100,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 <img src="docs/images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
 
 1. **Download.** On the [Releases](../../releases) page, under **Assets**, download
-   `NFSMostWanted2012-0.2.5.zip` (not "Source code", which is only for developers) and unzip it on
+   `NFSMostWanted2012-0.2.6.zip` (not "Source code", which is only for developers) and unzip it on
    your computer.
 2. **Copy to the SD card.** Copy the `switch` folder from the zip to the root of your SD card.
 3. **Add your game.** Copy your APK and your OBB into `switch/NFSMostWanted2012/game/`. Don't unzip or
@@ -119,7 +119,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.2.5.nro   the port
+├── NFSMostWanted2012-0.2.6.nro   the port
 ├── README.txt                    the player's guide
 ├── LICENSES.txt                  open-source components and their licenses
 ├── game/                         YOUR game files (never share them)
@@ -188,7 +188,7 @@ straight; about 30° of tilt is full lock. All buttons keep working.<br>
 | Music and sound effects | ✅ Works |
 | Saves (kept across updates) | ✅ Works |
 | 720p handheld / 1080p docked | ✅ Works (the resolution is chosen when the game starts) |
-| Frame rate | ⚠️ Still being tuned on real hardware: the game targets 30 fps, and busy races can drop below that at stock clocks. The debug menu can raise the CPU clock. |
+| Frame rate | ⚠️ Still being tuned on real hardware: the game targets 30 fps, and busy races can drop below that at stock clocks. The debug menu can raise the CPU clock. 0.2.6 removes the main causes of short stutters (reading the game data and the log from the SD card). |
 | Gyro steering, custom clocks | 🧪 New, not yet confirmed on many consoles: feedback welcome |
 | Online features (Autolog, leaderboards, EA account, store) | ❌ Not available: the port is offline by design |
 
@@ -274,6 +274,15 @@ those `perf:` lines in an issue helps tune the port.
 </details>
 
 <details>
+<summary><b>The sound crackles. What can I do?</b></summary>
+
+The game mixes its sound so loud that loud moments are cut off, which sounds like crackling. Since
+0.2.6 the port lowers the mix to 70% by default; you can change it under *Sound volume* in the debug
+menu (ZL + ZR + Minus). Turn the console's volume up instead. If the sound breaks up or stops for
+a moment, please report it with `log.txt`: it counts those "dropouts".
+</details>
+
+<details>
 <summary><b>How do I report a bug?</b></summary>
 
 Open an [issue](../../issues/new/choose) and attach `log.txt` from the port's folder. It says what
@@ -306,7 +315,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-The result is `build-switch/NFSMostWanted2012-0.2.5.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
+The result is `build-switch/NFSMostWanted2012-0.2.6.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
 the details, the Linux test build used for development, and how a release is made.
 
 ## Credits

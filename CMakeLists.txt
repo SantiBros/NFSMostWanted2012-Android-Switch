@@ -3,7 +3,7 @@ project(nfsmw_loader CXX C)
 
 # The port's version: shown in the Homebrew Menu / Sphaira, in the .nro and zip
 # file names (NFSMostWanted2012-<version>.nro) and at the top of log.txt.
-set(NFSMW_VERSION "0.2.5")
+set(NFSMW_VERSION "0.2.6")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,6 +53,7 @@ set(CORE_SOURCES
   src/hle/libc_string.cpp
   src/hle/libc_stdio.cpp
   src/hle/libc_io.cpp
+  src/hle/file_cache.cpp
   src/hle/libc_misc.cpp
   src/hle/net_block.cpp
   src/hle/libc_math.cpp
@@ -83,7 +84,7 @@ set(CORE_SOURCES
 if(NINTENDO_SWITCH)
   # ---- Nintendo Switch (devkitPro / libnx) ----------------------------------
   # cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake
-  add_executable(nfsmw ${CORE_SOURCES} src/platform/platform_switch.cpp)
+  add_executable(nfsmw ${CORE_SOURCES} src/platform/platform_switch.cpp src/platform/audio_switch.cpp)
   target_compile_definitions(nfsmw PRIVATE NFSMW_VERSION="${NFSMW_VERSION}")
   target_include_directories(nfsmw PRIVATE src . external/dynarmic/src)
   target_compile_options(nfsmw PRIVATE -Wall -Wno-unused-function -ffunction-sections)

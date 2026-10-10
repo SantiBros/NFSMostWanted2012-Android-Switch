@@ -176,7 +176,7 @@ Need for Speed (necesita `pip install pillow`). El `.nro` publicado nunca trae i
 Con la tarjeta SD como unidad `E:` (todo en una sola línea):
 
 ```
-python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.2.5.nro --out E:\switch\NFSMostWanted2012
+python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.2.6.nro --out E:\switch\NFSMostWanted2012
 ```
 
 En macOS / Linux: `python3 prepare_sd.py ... --out /Volumes/SD/switch/NFSMostWanted2012`.
@@ -197,6 +197,8 @@ Los mensajes del port salen en inglés; aquí está qué significan y qué hacer
 | **"Please start the Homebrew Menu in title-takeover mode"** | Mantén **R** al abrir un juego y luego abre el port. Ver [Abrir el juego](#abrir-el-juego). |
 | **El juego se cierra o la pantalla queda negra** | En `settings.ini`, prueba `direct_memory=off` y después `gl_thread=off` (de a uno; cada cambio se aplica al volver a abrirlo). |
 | **Pocos FPS** | Abre el menú de depuración (ZL + ZR + Menos) y pon *Frame-rate counter: full*. `log.txt` escribe cada 10 segundos una línea `perf:` que termina diciendo qué frena los FPS (código del juego, driver gráfico o GPU). Subir el reloj de la CPU ayuda cuando dice "game code". |
+| **Tirones cortos aunque el contador marca 30** | Las líneas `perf:` de `log.txt` los cuentan ("hitches") y muestran cuánto esperó el juego a la tarjeta SD ("game waited"). Por favor [repórtalos](#reportar-un-error) con `log.txt`. Una tarjeta SD lenta o casi llena los empeora. |
+| **El sonido cruje o se distorsiona** | Baja *Sound volume* (volumen del sonido) en el menú de depuración (ZL + ZR + Menos). 70% es el valor por defecto; 100% es la mezcla completa del juego, que se corta en los momentos fuertes. Si en cambio el sonido se entrecorta, `log.txt` cuenta los "dropouts" (cortes): por favor repórtalo. |
 | **La consola se congela** | Espera un momento e intenta cerrar el juego desde el menú HOME antes de mantener el botón de encendido: apagar la consola a la fuerza mientras escribe en la tarjeta SD puede dañar archivos. |
 | **El Homebrew Menu muestra el port dos veces** | Todavía hay un `.nro` viejo en la carpeta: bórralo (o abre una vez la versión nueva, que lo borra sola). |
 
