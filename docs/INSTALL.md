@@ -1,9 +1,18 @@
 # Installing NFS Most Wanted 2012 on the Switch
 
+[![English](https://img.shields.io/badge/lang-English-e11d2e?style=for-the-badge)](INSTALL.md)
+[![Español](https://img.shields.io/badge/idioma-Espa%C3%B1ol-2b2f38?style=for-the-badge)](INSTALL.es.md)
+
 [← Back to the README](../README.md)
+
+> [!TIP]
+> **New to Switch homebrew?** You first need a console that runs custom firmware (Atmosphère) with
+> the Homebrew Menu. The community guide [switch.hacks.guide](https://switch.hacks.guide/) explains
+> how, step by step. The words used on this page are explained in the [glossary](#glossary).
 
 - [What you need](#what-you-need)
 - [Your game files](#your-game-files)
+  - [Getting the files from your own phone](#getting-the-files-from-your-own-phone)
 - [Install](#install)
 - [The first start](#the-first-start)
 - [Starting the game](#starting-the-game)
@@ -13,6 +22,7 @@
 - [Optional: the PC script](#optional-the-pc-script)
 - [Troubleshooting](#troubleshooting)
 - [Reporting a bug](#reporting-a-bug)
+- [Glossary](#glossary)
 
 ## What you need
 
@@ -37,10 +47,31 @@ Wanted* for Android, version **1.3.128** (package `com.ea.games.nfs13_row`):
 | **OBB**, `main.1003128.com.ea.games.nfs13_row.obb` (about 650 MB) | The game data: cars, tracks, textures, sounds. It's a zip archive the game opens itself, so it must stay **exactly as it is**: don't unzip it. |
 | or one **`.xapk`** (or `.apks`) | A bundle with both inside. Copy it as it is: the port reads the APK and the OBB out of it. |
 
+### Getting the files from your own phone
+
+If the game is installed on your Android phone, both files are already there:
+
+- **The OBB**: on the phone's storage, in `Android/obb/com.ea.games.nfs13_row/`, named
+  `main.1003128.com.ea.games.nfs13_row.obb`. Connect the phone to a computer with a USB cable, choose
+  **File transfer** on the phone, and copy the file from that folder. (Recent Android versions hide
+  `Android/obb` from apps on the phone itself, but a computer can usually still see it.)
+- **The APK**: Android doesn't show it as a file, but an "APK extractor" app from the Play Store can
+  save the APK of an installed app. Pick *Need for Speed Most Wanted* and copy the saved `.apk` to
+  your computer. If it saves several files or an `.apks` file instead, copy that: the port reads
+  bundles too.
+- **Check the version**: in the phone's *Settings → Apps → Need for Speed Most Wanted*, the version
+  must be **1.3.128**.
+
+Developers can also use `adb`: `adb shell pm path com.ea.games.nfs13_row` shows where the APK is,
+and `adb pull` copies it (and the OBB from `/sdcard/Android/obb/com.ea.games.nfs13_row/`).
+
 ## Install
 
-1. Download `NFSMostWanted2012-<version>.zip` from the [Releases](../../../releases/latest) page and
-   unzip it on your computer.
+<img src="images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
+
+1. On the [Releases](../../../releases/latest) page, under **Assets**, download
+   `NFSMostWanted2012-<version>.zip`. (Not "Source code (zip)": that is only the source code, for
+   developers.) Unzip it on your computer.
 2. Copy the `switch` folder inside it to the **root** of your SD card. (If your SD card already has
    a `switch` folder, the two merge; nothing else in it is touched.)
 3. Copy your APK and your OBB into `switch/NFSMostWanted2012/game/`. Don't unzip or rename them.
@@ -168,3 +199,17 @@ The script checks your files and says what it did: `libapp.so sha256 a73dcc17...
 Open an [issue](../../../issues/new/choose) and attach **`log.txt`** from the port's folder. Please
 include the port version, your firmware and Atmosphère versions, and whether you played handheld or
 docked. Never attach game files (APK, OBB or `.so` files).
+
+## Glossary
+
+| Word | What it means |
+|---|---|
+| **APK** | The file an Android app is installed from. It holds the game's program code and small files. |
+| **OBB** | The big data file of an Android game (cars, tracks, sounds). Here: `main.1003128.com.ea.games.nfs13_row.obb`. |
+| **XAPK / APKS** | A bundle that packs the APK (and sometimes the OBB) into one file. The port reads them as they are. |
+| **Atmosphère** | The custom firmware that lets a Switch run homebrew. |
+| **emuMMC** | A copy of the Switch's system on the SD card, used to run custom firmware without touching the console's own system. The safer way to run homebrew. |
+| **Homebrew Menu** | The menu that lists and starts homebrew apps (`.nro` files) on the Switch. |
+| **Title takeover** | Opening the Homebrew Menu by holding **R** while starting a game, so homebrew gets all the memory a game gets. Needed for this port. |
+| **`.nro`** | A homebrew app for the Switch. `NFSMostWanted2012-<version>.nro` is the port. |
+| **SD card root** | The top level of the SD card, outside any folder. The `switch` folder goes there. |

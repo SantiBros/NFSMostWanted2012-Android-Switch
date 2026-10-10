@@ -1,8 +1,9 @@
 <div align="center">
 
-<img src="docs/images/banner.jpg" alt="NFS Most Wanted 2012 (versión Android) para Nintendo Switch, un port homebrew no oficial" width="100%">
+[![English](https://img.shields.io/badge/lang-English-2b2f38?style=for-the-badge)](README.md)
+[![Español](https://img.shields.io/badge/idioma-Espa%C3%B1ol-e11d2e?style=for-the-badge)](README.es.md)
 
-[English](README.md) · **Español**
+<img src="docs/images/banner.jpg" alt="NFS Most Wanted 2012 (versión Android) para Nintendo Switch, un port homebrew no oficial" width="100%">
 
 # NFS Most Wanted 2012 (Android) para Nintendo Switch
 
@@ -17,7 +18,7 @@ ponla en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
 ![Atmosphère](https://img.shields.io/badge/CFW-Atmosph%C3%A8re-2b2f38?style=for-the-badge)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-2b2f38?style=for-the-badge)](LICENSE)
 
-[Instalar](#instalar-en-3-pasos) · [Controles](#controles) · [Preguntas frecuentes](#preguntas-frecuentes) · [Solución de problemas](docs/INSTALL.md#troubleshooting) · [Cambios](CHANGELOG.md)
+[Instalar](#cómo-instalar) · [Controles](#controles) · [Preguntas frecuentes](#preguntas-frecuentes) · [Solución de problemas](docs/INSTALL.es.md#solución-de-problemas) · [Cambios](CHANGELOG.md)
 
 </div>
 
@@ -94,13 +95,25 @@ propio juego para manejar con control.</sub>
 | **Tarjeta SD** | Alrededor de 1 GB libre. |
 | **PC** | No hace falta. |
 
-## Instalar en 3 pasos
+## Cómo instalar
 
-1. **Descarga** `NFSMostWanted2012-0.2.5.zip` desde [Releases](../../releases/latest) y copia su
-   carpeta `switch` a la raíz de tu tarjeta SD.
-2. **Agrega tu juego.** Copia tu APK y tu OBB en `switch/NFSMostWanted2012/game/`. No los
+> [!TIP]
+> **¿Es tu primera vez con homebrew en la Switch?** Primero prepara tu consola con firmware
+> modificado (Atmosphère) y el Homebrew Menu: la guía de la comunidad
+> [switch.hacks.guide](https://switch.hacks.guide/) (en inglés) lo explica paso a paso. ¿No sabes qué
+> es un APK, un OBB o el emuMMC? Mira el [glosario](docs/INSTALL.es.md#glosario).
+
+<img src="docs/images/install-steps.es.png" alt="Instalar en 4 pasos: descarga el zip, copia la carpeta switch a la SD, agrega tu APK y tu OBB a la carpeta game, abre con R + cualquier juego" width="100%">
+
+1. **Descarga.** En la página de [Releases](../../releases/latest), en la sección **Assets**,
+   descarga `NFSMostWanted2012-0.2.5.zip` (no "Source code", que es solo para desarrolladores) y
+   descomprímelo en tu computadora.
+2. **Copia a la SD.** Copia la carpeta `switch` del zip a la raíz de tu tarjeta SD.
+3. **Agrega tu juego.** Copia tu APK y tu OBB en `switch/NFSMostWanted2012/game/`. No los
    descomprimas ni les cambies el nombre. Si tu copia es un solo archivo `.xapk`, copia solo ese.
-3. **Ábrelo.** Mantén presionado **R** mientras abres cualquier juego para entrar al Homebrew Menu y
+   ¿Todavía no los tienes como archivos? Aquí está
+   [cómo sacarlos de tu propio teléfono](docs/INSTALL.es.md#sacar-los-archivos-de-tu-propio-teléfono).
+4. **Juega.** Mantén presionado **R** mientras abres cualquier juego para entrar al Homebrew Menu y
    elige **NFS Most Wanted 2012 Loader**. La primera vez, el port prepara el juego a partir de tu APK
    (unos segundos, o cerca de un minuto con un `.xapk`). Presiona **A** y a correr.
 
@@ -131,9 +144,9 @@ sd:/switch/NFSMostWanted2012/
 
 </details>
 
-La [guía de instalación completa](docs/INSTALL.md) (en inglés) explica cómo actualizar, cómo hacer
-respaldos, el script opcional para PC que le pone al port el ícono del juego, y la
-[solución de problemas](docs/INSTALL.md#troubleshooting).
+La [guía de instalación completa](docs/INSTALL.es.md) explica cómo actualizar, cómo hacer respaldos,
+el script opcional para PC que le pone al port el ícono del juego, y la
+[solución de problemas](docs/INSTALL.es.md#solución-de-problemas).
 
 ### Actualizar
 
@@ -258,8 +271,7 @@ Toda tu carrera (dinero, reputación y rango Most Wanted, autos, eventos) es un 
 <summary><b>¿El Homebrew Menu puede mostrar el ícono real del juego?</b></summary>
 
 Sí, en tu propia copia: usa en una PC el script opcional `prepare_sd.py` que viene en la descarga,
-con la opción `--nro` (está en la [guía de instalación](docs/INSTALL.md#optional-the-pc-script), en
-inglés). El `.nro` publicado nunca trae imágenes de EA.
+con la opción `--nro` (está en la [guía de instalación](docs/INSTALL.es.md#opcional-el-script-para-pc)). El `.nro` publicado nunca trae imágenes de EA.
 </details>
 
 <details>

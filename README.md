@@ -1,8 +1,9 @@
 <div align="center">
 
-<img src="docs/images/banner.jpg" alt="NFS Most Wanted 2012 (Android version) for Nintendo Switch, an unofficial homebrew port" width="100%">
+[![English](https://img.shields.io/badge/lang-English-e11d2e?style=for-the-badge)](README.md)
+[![Español](https://img.shields.io/badge/idioma-Espa%C3%B1ol-2b2f38?style=for-the-badge)](README.es.md)
 
-**English** · [Español](README.es.md)
+<img src="docs/images/banner.jpg" alt="NFS Most Wanted 2012 (Android version) for Nintendo Switch, an unofficial homebrew port" width="100%">
 
 # NFS Most Wanted 2012 (Android) for Nintendo Switch
 
@@ -17,7 +18,7 @@ one folder, and race through Fairhaven, handheld or docked.
 ![Atmosphère](https://img.shields.io/badge/CFW-Atmosph%C3%A8re-2b2f38?style=for-the-badge)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2b2f38?style=for-the-badge)](LICENSE)
 
-[Install](#install-in-3-steps) · [Controls](#controls) · [FAQ](#faq) · [Troubleshooting](docs/INSTALL.md#troubleshooting) · [Changelog](CHANGELOG.md) · [How it works](docs/TECHNICAL.md)
+[Install](#how-to-install) · [Controls](#controls) · [FAQ](#faq) · [Troubleshooting](docs/INSTALL.md#troubleshooting) · [Changelog](CHANGELOG.md) · [How it works](docs/TECHNICAL.md)
 
 </div>
 
@@ -89,13 +90,23 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 | **SD card** | About 1 GB free. |
 | **PC** | Not needed. |
 
-## Install in 3 steps
+## How to install
 
-1. **Download** `NFSMostWanted2012-0.2.5.zip` from [Releases](../../releases/latest) and copy its
-   `switch` folder to the root of your SD card.
-2. **Add your game.** Copy your APK and your OBB into `switch/NFSMostWanted2012/game/`. Don't unzip or
-   rename them. If your copy is a single `.xapk` file, copy just that.
-3. **Start it.** Hold **R** while you launch any game to open the Homebrew Menu, then choose
+> [!TIP]
+> **New to Switch homebrew?** First set up your console with custom firmware (Atmosphère) and the
+> Homebrew Menu: the community guide [switch.hacks.guide](https://switch.hacks.guide/) explains it
+> step by step. Unsure what APK, OBB or emuMMC mean? See the [glossary](docs/INSTALL.md#glossary).
+
+<img src="docs/images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
+
+1. **Download.** On the [Releases](../../releases/latest) page, under **Assets**, download
+   `NFSMostWanted2012-0.2.5.zip` (not "Source code", which is only for developers) and unzip it on
+   your computer.
+2. **Copy to the SD card.** Copy the `switch` folder from the zip to the root of your SD card.
+3. **Add your game.** Copy your APK and your OBB into `switch/NFSMostWanted2012/game/`. Don't unzip or
+   rename them. If your copy is a single `.xapk` file, copy just that. Don't have them as files yet?
+   Here's [how to get them from your own phone](docs/INSTALL.md#getting-the-files-from-your-own-phone).
+4. **Play.** Hold **R** while you launch any game to open the Homebrew Menu, then choose
    **NFS Most Wanted 2012 Loader**. The first start sets the game up from your APK (a few seconds, or
    about a minute for an `.xapk`). Press **A** and you're racing.
 
