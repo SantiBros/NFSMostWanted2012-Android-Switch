@@ -1,0 +1,66 @@
+name: Bug report
+description: Something doesn't work, crashes or runs badly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Please **never attach game files** (APK, OBB, `.so` files): reports with game files are deleted.
+        Check the troubleshooting table in `docs/INSTALL.md` first: many problems are solved there.
+  - type: input
+    id: version
+    attributes:
+      label: Port version
+      description: Shown in the Homebrew Menu and on the first line of log.txt.
+      placeholder: "0.2.5"
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware and Atmosphère version
+      placeholder: "Firmware 20.1.0, Atmosphère 1.9.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Played in
+      options:
+        - Handheld
+        - Docked
+        - Both
+    validations:
+      required: true
+  - type: dropdown
+    id: launch
+    attributes:
+      label: Started from
+      options:
+        - Homebrew Menu, R + a game (title takeover)
+        - A forwarder
+        - Sphaira or another launcher
+        - Homebrew Menu from the Album
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: log.txt
+      description: Attach `switch/NFSMostWanted2012/log.txt` (drag the file here), or paste it.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I use my own copy of the game (version 1.3.128) and I didn't attach any game files.
+          required: true

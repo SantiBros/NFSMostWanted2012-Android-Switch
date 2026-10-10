@@ -1,0 +1,44 @@
+# ---- Game files: NEVER commit these ------------------------------------------
+# Every player supplies their own copy of the game (see README, "Game files").
+*.apk
+*.xapk
+*.apks
+*.obb
+*.so
+*.sba
+/lib/
+/apk/
+/fs/
+/gamedata/
+/gamefiles/
+/switch/
+/dist/
+# a port folder used for testing (game files and saves)
+/game/
+/save/
+
+# ---- Build output -----------------------------------------------------------------
+/build*/
+*.nro
+*.nacp
+*.nso
+*.elf
+*.o
+*.a
+
+# ---- Files written when the loader runs -------------------------------------------
+nfsmw.log
+log.txt
+settings.ini
+*.part
+/screenshots/
+/shots*/
+/*.out
+
+# ---- Editor / OS / Python ---------------------------------------------------------
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

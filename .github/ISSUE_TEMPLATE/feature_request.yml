@@ -1,0 +1,16 @@
+name: Idea or request
+description: Suggest something that would make the port better
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe the idea and why it would help.
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
+      description: Examples from other ports, screenshots, etc. (no game files, please)

@@ -1,0 +1,14 @@
+# Normalize line endings in the repository.
+* text=auto eol=lf
+*.bat text eol=crlf
+
+# Binary files
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.woff2 binary
+*.nro binary
+
+# Language statistics: count the port's own code, not the bundled third-party code.
+external/** linguist-vendored
+docs/** linguist-documentation

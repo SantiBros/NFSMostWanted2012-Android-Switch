@@ -1,0 +1,419 @@
+diff --git a/src/dynarmic/CMakeLists.txt b/src/dynarmic/CMakeLists.txt
+index b234cd2..4c11df6 100644
+--- a/src/dynarmic/CMakeLists.txt
++++ b/src/dynarmic/CMakeLists.txt
+@@ -485,7 +485,7 @@ elseif (APPLE)
+             backend/exception_handler_macos_mig.c
+         )
+     endif()
+-elseif (UNIX)
++elseif (UNIX AND NOT NINTENDO_SWITCH)
+     if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+         target_link_libraries(dynarmic PRIVATE rt)
+     endif()
+diff --git a/src/dynarmic/backend/arm64/a32_address_space.cpp b/src/dynarmic/backend/arm64/a32_address_space.cpp
+index bbdf925..b6d33d6 100644
+--- a/src/dynarmic/backend/arm64/a32_address_space.cpp
++++ b/src/dynarmic/backend/arm64/a32_address_space.cpp
+@@ -392,6 +392,9 @@ EmitConfig A32AddressSpace::GetEmitConfig() {
+         .recompile_on_fastmem_failure = conf.recompile_on_fastmem_failure,
+         .fastmem_address_space_bits = 32,
+         .silently_mirror_fastmem = true,
++        .fastmem_without_fault_handler = conf.fastmem_without_fault_handler,
++
++        .ignore_fpsr = conf.ignore_fp_exception_flags,
+ 
+         .wall_clock_cntpct = conf.wall_clock_cntpct,
+         .enable_cycle_counting = conf.enable_cycle_counting,
+diff --git a/src/dynarmic/backend/arm64/address_space.cpp b/src/dynarmic/backend/arm64/address_space.cpp
+index 2c7ae77..6ff02c0 100644
+--- a/src/dynarmic/backend/arm64/address_space.cpp
++++ b/src/dynarmic/backend/arm64/address_space.cpp
+@@ -23,14 +23,18 @@ namespace Dynarmic::Backend::Arm64 {
+ AddressSpace::AddressSpace(size_t code_cache_size)
+         : code_cache_size(code_cache_size)
+         , mem(code_cache_size)
+-        , code(mem.ptr(), mem.ptr())
++        , code(mem.wptr(), mem.ptr())
+         , fastmem_manager(exception_handler) {
+     ASSERT_MSG(code_cache_size <= 128 * 1024 * 1024, "code_cache_size > 128 MiB not currently supported");
+ 
+-    exception_handler.Register(mem, code_cache_size);
++#if !defined(__SWITCH__) && !defined(DYNARMIC_DUAL_MAPPED_CODE)
++    // nfsmw-port: fastmem fault handling needs a single RWX mapping; the
++    // dual-mapped (Switch) configuration relies on page tables instead.
++    exception_handler.Register(mem.block_for_exception_handler(), code_cache_size);
+     exception_handler.SetFastmemCallback([this](u64 host_pc) {
+         return FastmemCallback(host_pc);
+     });
++#endif
+ }
+ 
+ AddressSpace::~AddressSpace() = default;
+@@ -136,7 +140,7 @@ void AddressSpace::Link(EmittedBlockInfo& block_info) {
+     using namespace oaknut::util;
+ 
+     for (auto [ptr_offset, target] : block_info.relocations) {
+-        CodeGenerator c{mem.ptr(), mem.ptr()};
++        CodeGenerator c{mem.wptr(), mem.ptr()};
+         c.set_xptr(reinterpret_cast<u32*>(block_info.entry_point + ptr_offset));
+ 
+         switch (target) {
+@@ -276,7 +280,7 @@ void AddressSpace::LinkBlockLinks(const CodePtr entry_point, const CodePtr targe
+     using namespace oaknut::util;
+ 
+     for (auto [ptr_offset, type] : block_relocations_list) {
+-        CodeGenerator c{mem.ptr(), mem.ptr()};
++        CodeGenerator c{mem.wptr(), mem.ptr()};
+         c.set_xptr(reinterpret_cast<u32*>(entry_point + ptr_offset));
+ 
+         switch (type) {
+diff --git a/src/dynarmic/backend/arm64/address_space.h b/src/dynarmic/backend/arm64/address_space.h
+index 835566b..0709c59 100644
+--- a/src/dynarmic/backend/arm64/address_space.h
++++ b/src/dynarmic/backend/arm64/address_space.h
+@@ -9,7 +9,8 @@
+ #include <optional>
+ 
+ #include <mcl/stdint.hpp>
+-#include <oaknut/code_block.hpp>
++
++#include "dynarmic/backend/arm64/code_memory.h"
+ #include <oaknut/oaknut.hpp>
+ #include <tsl/robin_map.h>
+ #include <tsl/robin_set.h>
+@@ -70,7 +71,7 @@ protected:
+     FakeCall FastmemCallback(u64 host_pc);
+ 
+     const size_t code_cache_size;
+-    oaknut::CodeBlock mem;
++    CodeMemory mem;
+     oaknut::CodeGenerator code;
+ 
+     // A IR::LocationDescriptor will have one current CodePtr.
+diff --git a/src/dynarmic/backend/arm64/code_memory.h b/src/dynarmic/backend/arm64/code_memory.h
+new file mode 100644
+index 0000000..5af2e74
+--- /dev/null
++++ b/src/dynarmic/backend/arm64/code_memory.h
+@@ -0,0 +1,111 @@
++/* Executable memory for the arm64 backend.
++ *
++ * nfsmw-port patch: Horizon (Nintendo Switch) never gives a process memory
++ * that is writable and executable at the same address. Code is written
++ * through one mapping (wptr) and executed from another (ptr) that alias the
++ * same physical pages (libnx Jit / CodeMemory). The Linux build can use the
++ * same dual-mapped scheme (DYNARMIC_DUAL_MAPPED_CODE) to test that path.
++ * SPDX-License-Identifier: 0BSD
++ */
++#pragma once
++
++#include <cstddef>
++#include <cstdint>
++#include <new>
++
++#if defined(__SWITCH__)
++#    include <switch.h>
++#elif defined(DYNARMIC_DUAL_MAPPED_CODE)
++#    include <oaknut/dual_code_block.hpp>
++#else
++#    include <oaknut/code_block.hpp>
++#endif
++
++namespace Dynarmic::Backend::Arm64 {
++
++class CodeMemory {
++public:
++    explicit CodeMemory(std::size_t size)
++#if defined(__SWITCH__)
++    {
++        size = (size + 0xFFF) & ~std::size_t(0xFFF);
++        if (R_FAILED(jitCreate(&jit, size))) throw std::bad_alloc{};
++        if (R_FAILED(jitTransitionToExecutable(&jit))) throw std::bad_alloc{};
++        wmem = static_cast<std::uint32_t*>(jitGetRwAddr(&jit));
++        xmem = static_cast<std::uint32_t*>(jitGetRxAddr(&jit));
++        this->size = size;
++    }
++    ~CodeMemory() { jitClose(&jit); }
++#else
++        : block(size), size(size) {
++#    if defined(DYNARMIC_DUAL_MAPPED_CODE)
++        wmem = block.wptr();
++        xmem = block.xptr();
++#    else
++        wmem = xmem = block.ptr();
++#    endif
++    }
++#endif
++
++    CodeMemory(const CodeMemory&) = delete;
++    CodeMemory& operator=(const CodeMemory&) = delete;
++
++    // Address code executes from (what all CodePtrs refer to).
++    std::uint32_t* ptr() const { return xmem; }
++    // Address code is written through.
++    std::uint32_t* wptr() const { return wmem; }
++
++    void protect() {
++#if !defined(__SWITCH__) && !defined(DYNARMIC_DUAL_MAPPED_CODE)
++        block.protect();
++#endif
++    }
++    void unprotect() {
++#if !defined(__SWITCH__) && !defined(DYNARMIC_DUAL_MAPPED_CODE)
++        block.unprotect();
++#endif
++    }
++
++    // `mem` is an execute-side address.
++    void invalidate(std::uint32_t* mem, std::size_t bytes) {
++#if defined(__SWITCH__)
++        armDCacheFlush(wmem + (mem - xmem), bytes);
++        armICacheInvalidate(mem, bytes);
++#elif defined(DYNARMIC_DUAL_MAPPED_CODE)
++        sync(wmem + (mem - xmem), mem, bytes);
++#else
++        block.invalidate(mem, bytes);
++#endif
++    }
++    void invalidate_all() { invalidate(xmem, size); }
++#if !defined(__SWITCH__) && !defined(DYNARMIC_DUAL_MAPPED_CODE)
++    oaknut::CodeBlock& block_for_exception_handler() { return block; }
++#endif
++
++private:
++#if defined(__SWITCH__)
++    Jit jit{};
++#elif defined(DYNARMIC_DUAL_MAPPED_CODE)
++    static void sync(std::uint32_t* w, std::uint32_t* x, std::size_t bytes) {
++#    if defined(__aarch64__)
++        const std::uintptr_t line = 64;
++        for (std::uintptr_t a = (std::uintptr_t)w & ~(line - 1); a < (std::uintptr_t)w + bytes; a += line)
++            __asm__ volatile("dc cvau, %0" ::"r"(a) : "memory");
++        __asm__ volatile("dsb ish" ::: "memory");
++        for (std::uintptr_t a = (std::uintptr_t)x & ~(line - 1); a < (std::uintptr_t)x + bytes; a += line)
++            __asm__ volatile("ic ivau, %0" ::"r"(a) : "memory");
++        __asm__ volatile("dsb ish\nisb" ::: "memory");
++#    else
++        (void)w, (void)x, (void)bytes;
++#    endif
++    }
++    oaknut::DualCodeBlock block;
++#else
++    oaknut::CodeBlock block;
++#endif
++    std::uint32_t* wmem = nullptr;
++    std::uint32_t* xmem = nullptr;
++    std::size_t size = 0;
++};
++
++}  // namespace Dynarmic::Backend::Arm64
+diff --git a/src/dynarmic/backend/arm64/emit_arm64.cpp b/src/dynarmic/backend/arm64/emit_arm64.cpp
+index 1ecb542..9101f76 100644
+--- a/src/dynarmic/backend/arm64/emit_arm64.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64.cpp
+@@ -198,7 +198,7 @@ EmittedBlockInfo EmitArm64(oaknut::CodeGenerator& code, IR::Block block, const E
+ 
+     EmittedBlockInfo ebi;
+ 
+-    FpsrManager fpsr_manager{code, conf.state_fpsr_offset};
++    FpsrManager fpsr_manager{code, conf.state_fpsr_offset, conf.ignore_fpsr};
+     RegAlloc reg_alloc{code, fpsr_manager, GPR_ORDER, FPR_ORDER};
+     EmitContext ctx{block, reg_alloc, conf, ebi, fpsr_manager, fastmem_manager, {}};
+ 
+diff --git a/src/dynarmic/backend/arm64/emit_arm64.h b/src/dynarmic/backend/arm64/emit_arm64.h
+index 58ccb0e..b9baab9 100644
+--- a/src/dynarmic/backend/arm64/emit_arm64.h
++++ b/src/dynarmic/backend/arm64/emit_arm64.h
+@@ -136,6 +136,10 @@ struct EmitConfig {
+     bool recompile_on_fastmem_failure;
+     size_t fastmem_address_space_bits;
+     bool silently_mirror_fastmem;
++    bool fastmem_without_fault_handler;
++
++    // Floating point
++    bool ignore_fpsr;
+ 
+     // Timing
+     bool wall_clock_cntpct;
+diff --git a/src/dynarmic/backend/arm64/emit_arm64_memory.cpp b/src/dynarmic/backend/arm64/emit_arm64_memory.cpp
+index 339e2c5..feaa6ee 100644
+--- a/src/dynarmic/backend/arm64/emit_arm64_memory.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64_memory.cpp
+@@ -487,7 +487,7 @@ void InlinePageTableEmitWriteMemory(oaknut::CodeGenerator& code, EmitContext& ct
+ }
+ 
+ std::optional<DoNotFastmemMarker> ShouldFastmem(EmitContext& ctx, IR::Inst* inst) {
+-    if (!ctx.conf.fastmem_pointer || !ctx.fastmem.SupportsFastmem()) {
++    if (!ctx.conf.fastmem_pointer || !(ctx.fastmem.SupportsFastmem() || ctx.conf.fastmem_without_fault_handler)) {
+         return std::nullopt;
+     }
+ 
+diff --git a/src/dynarmic/backend/arm64/exclusive_monitor.cpp b/src/dynarmic/backend/arm64/exclusive_monitor.cpp
+index d57a29c..725c010 100644
+--- a/src/dynarmic/backend/arm64/exclusive_monitor.cpp
++++ b/src/dynarmic/backend/arm64/exclusive_monitor.cpp
+@@ -35,9 +35,9 @@ bool ExclusiveMonitor::CheckAndClear(size_t processor_id, VAddr address) {
+         return false;
+     }
+ 
+-    for (VAddr& other_address : exclusive_addresses) {
+-        if (other_address == masked_address) {
+-            other_address = INVALID_EXCLUSIVE_ADDRESS;
++    for (size_t i = 0; i < active_count; i++) {
++        if (exclusive_addresses[i] == masked_address) {
++            exclusive_addresses[i] = INVALID_EXCLUSIVE_ADDRESS;
+         }
+     }
+     return true;
+diff --git a/src/dynarmic/backend/arm64/fpsr_manager.cpp b/src/dynarmic/backend/arm64/fpsr_manager.cpp
+index 1c61474..7db9c35 100644
+--- a/src/dynarmic/backend/arm64/fpsr_manager.cpp
++++ b/src/dynarmic/backend/arm64/fpsr_manager.cpp
+@@ -13,11 +13,11 @@ namespace Dynarmic::Backend::Arm64 {
+ 
+ using namespace oaknut::util;
+ 
+-FpsrManager::FpsrManager(oaknut::CodeGenerator& code, size_t state_fpsr_offset)
+-        : code{code}, state_fpsr_offset{state_fpsr_offset} {}
++FpsrManager::FpsrManager(oaknut::CodeGenerator& code, size_t state_fpsr_offset, bool ignore_host_fpsr)
++        : code{code}, state_fpsr_offset{state_fpsr_offset}, ignore_host_fpsr{ignore_host_fpsr} {}
+ 
+ void FpsrManager::Spill() {
+-    if (!fpsr_loaded)
++    if (!fpsr_loaded || ignore_host_fpsr)
+         return;
+ 
+     code.LDR(Wscratch0, Xstate, state_fpsr_offset);
+@@ -29,7 +29,7 @@ void FpsrManager::Spill() {
+ }
+ 
+ void FpsrManager::Load() {
+-    if (fpsr_loaded)
++    if (fpsr_loaded || ignore_host_fpsr)
+         return;
+ 
+     code.MSR(oaknut::SystemReg::FPSR, XZR);
+diff --git a/src/dynarmic/backend/arm64/fpsr_manager.h b/src/dynarmic/backend/arm64/fpsr_manager.h
+index 9e5d68b..11c4baa 100644
+--- a/src/dynarmic/backend/arm64/fpsr_manager.h
++++ b/src/dynarmic/backend/arm64/fpsr_manager.h
+@@ -16,7 +16,7 @@ namespace Dynarmic::Backend::Arm64 {
+ 
+ class FpsrManager {
+ public:
+-    explicit FpsrManager(oaknut::CodeGenerator& code, size_t state_fpsr_offset);
++    explicit FpsrManager(oaknut::CodeGenerator& code, size_t state_fpsr_offset, bool ignore_host_fpsr = false);
+ 
+     void Spill();
+     void Load();
+@@ -27,6 +27,7 @@ public:
+ private:
+     oaknut::CodeGenerator& code;
+     size_t state_fpsr_offset;
++    bool ignore_host_fpsr;  // exception flags not tracked: never touch the host FPSR
+     bool fpsr_loaded = false;
+ };
+ 
+diff --git a/src/dynarmic/backend/x64/exclusive_monitor.cpp b/src/dynarmic/backend/x64/exclusive_monitor.cpp
+index 984b67b..b686ce2 100644
+--- a/src/dynarmic/backend/x64/exclusive_monitor.cpp
++++ b/src/dynarmic/backend/x64/exclusive_monitor.cpp
+@@ -35,9 +35,9 @@ bool ExclusiveMonitor::CheckAndClear(size_t processor_id, VAddr address) {
+         return false;
+     }
+ 
+-    for (VAddr& other_address : exclusive_addresses) {
+-        if (other_address == masked_address) {
+-            other_address = INVALID_EXCLUSIVE_ADDRESS;
++    for (size_t i = 0; i < active_count; i++) {
++        if (exclusive_addresses[i] == masked_address) {
++            exclusive_addresses[i] = INVALID_EXCLUSIVE_ADDRESS;
+         }
+     }
+     return true;
+diff --git a/src/dynarmic/common/spin_lock_arm64.cpp b/src/dynarmic/common/spin_lock_arm64.cpp
+index ccf807e..0dc35d8 100644
+--- a/src/dynarmic/common/spin_lock_arm64.cpp
++++ b/src/dynarmic/common/spin_lock_arm64.cpp
+@@ -5,10 +5,10 @@
+ 
+ #include <mutex>
+ 
+-#include <oaknut/code_block.hpp>
+ #include <oaknut/oaknut.hpp>
+ 
+ #include "dynarmic/backend/arm64/abi.h"
++#include "dynarmic/backend/arm64/code_memory.h"
+ #include "dynarmic/common/spin_lock.h"
+ 
+ namespace Dynarmic {
+@@ -42,7 +42,9 @@ struct SpinLockImpl {
+ 
+     void Initialize();
+ 
+-    oaknut::CodeBlock mem;
++    // nfsmw-port: CodeMemory instead of oaknut::CodeBlock, so the Switch
++    // (no RWX mappings) and the dual-mapped test build work too.
++    Backend::Arm64::CodeMemory mem;
+     oaknut::CodeGenerator code;
+ 
+     void (*lock)(volatile int*);
+@@ -54,7 +56,7 @@ SpinLockImpl impl;
+ 
+ SpinLockImpl::SpinLockImpl()
+         : mem{4096}
+-        , code{mem.ptr(), mem.ptr()} {}
++        , code{mem.wptr(), mem.ptr()} {}
+ 
+ void SpinLockImpl::Initialize() {
+     mem.unprotect();
+diff --git a/src/dynarmic/interface/A32/config.h b/src/dynarmic/interface/A32/config.h
+index 360df06..be605d9 100644
+--- a/src/dynarmic/interface/A32/config.h
++++ b/src/dynarmic/interface/A32/config.h
+@@ -189,6 +189,18 @@ struct UserConfig {
+     /// accesses will hit the memory callbacks.
+     bool recompile_on_fastmem_failure = true;
+ 
++    /// nfsmw-port: use fastmem_pointer even when the platform has no fault handler
++    /// (Horizon). Every guest access must then land in mapped host memory; an access
++    /// outside it is not caught. Only for embedders that guarantee this.
++    bool fastmem_without_fault_handler = false;
++
++    /// nfsmw-port: do not track the cumulative floating-point exception flags
++    /// (FPSCR.IOC/DZC/OFC/UFC/IXC/IDC, QC); the guest always reads them as 0.
++    /// On the arm64 backend this removes the clear and the read of the host FPSR
++    /// around the floating-point code of every block. Only for guests that never
++    /// read those flags.
++    bool ignore_fp_exception_flags = false;
++
+     /// Determines if we should use the above fastmem_pointer for exclusive reads and
+     /// writes. On x64, dynarmic currently relies on x64 cmpxchg semantics which may not
+     /// provide fully accurate emulation.
+diff --git a/src/dynarmic/interface/exclusive_monitor.h b/src/dynarmic/interface/exclusive_monitor.h
+index 4813675..7ba0d30 100644
+--- a/src/dynarmic/interface/exclusive_monitor.h
++++ b/src/dynarmic/interface/exclusive_monitor.h
+@@ -37,6 +37,9 @@ public:
+ 
+         Lock();
+         exclusive_addresses[processor_id] = masked_address;
++        if (processor_id >= active_count) {
++            active_count = processor_id + 1;
++        }
+         const T value = op();
+         std::memcpy(exclusive_values[processor_id].data(), &value, sizeof(T));
+         Unlock();
+@@ -81,6 +84,11 @@ private:
+     static constexpr VAddr RESERVATION_GRANULE_MASK = 0xFFFF'FFFF'FFFF'FFFFull;
+     static constexpr VAddr INVALID_EXCLUSIVE_ADDRESS = 0xDEAD'DEAD'DEAD'DEADull;
+     SpinLock lock;
++    // nfsmw-port: 1 + the highest processor id that has marked an address.
++    // CheckAndClear only scans that many entries instead of processor_count
++    // (with 256 possible guest threads but a handful running, the full scan
++    // on every exclusive store was a large part of its cost).
++    size_t active_count = 0;
+     std::vector<VAddr> exclusive_addresses;
+     std::vector<Vector> exclusive_values;
+ };

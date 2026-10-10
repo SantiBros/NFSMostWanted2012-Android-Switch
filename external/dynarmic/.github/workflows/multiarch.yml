@@ -1,0 +1,49 @@
+name: multiarch
+
+on: [ push, pull_request ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+
+    runs-on: macos-latest
+
+    steps:
+
+      - name: Install build dependencies
+        run: |
+          brew install ninja
+          echo "/usr/local/opt/llvm/bin" >> $GITHUB_PATH
+
+      - name: Checkout dynarmic repo
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install boost
+        id: install-boost
+        uses: MarkusJx/install-boost@v2
+        with:
+          boost_version: 1.88.0
+
+      - name: Configure CMake
+        env:
+          BOOST_ROOT: ${{ steps.install-boost.outputs.BOOST_ROOT }}
+        run: >
+          cmake
+          -B ${{github.workspace}}/build
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+          -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+          -G Ninja
+
+      - name: Build
+        working-directory: ${{github.workspace}}/build
+        run: cmake --build . --config Release
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest --extra-verbose -C ${{env.BUILD_TYPE}}

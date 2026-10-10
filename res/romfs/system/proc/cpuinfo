@@ -1,0 +1,36 @@
+Processor	: ARMv7 Processor rev 1 (v7l)
+processor	: 0
+Features	: half thumb fastmult vfp edsp neon vfpv3 tls vfpv4 idiva idivt vfpd32 lpae evtstrm
+CPU implementer	: 0x41
+CPU architecture: 7
+CPU variant	: 0x1
+CPU part	: 0xd07
+CPU revision	: 1
+
+processor	: 1
+Features	: half thumb fastmult vfp edsp neon vfpv3 tls vfpv4 idiva idivt vfpd32 lpae evtstrm
+CPU implementer	: 0x41
+CPU architecture: 7
+CPU variant	: 0x1
+CPU part	: 0xd07
+CPU revision	: 1
+
+processor	: 2
+Features	: half thumb fastmult vfp edsp neon vfpv3 tls vfpv4 idiva idivt vfpd32 lpae evtstrm
+CPU implementer	: 0x41
+CPU architecture: 7
+CPU variant	: 0x1
+CPU part	: 0xd07
+CPU revision	: 1
+
+processor	: 3
+Features	: half thumb fastmult vfp edsp neon vfpv3 tls vfpv4 idiva idivt vfpd32 lpae evtstrm
+CPU implementer	: 0x41
+CPU architecture: 7
+CPU variant	: 0x1
+CPU part	: 0xd07
+CPU revision	: 1
+
+Hardware	: Nintendo Switch (Tegra X1)
+Revision	: 0000
+Serial		: 0000000000000000

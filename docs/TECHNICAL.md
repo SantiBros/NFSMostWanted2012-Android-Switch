@@ -1,0 +1,317 @@
+# How the port works
+
+[← Back to the README](../README.md)
+
+Technical notes for people who want to know what happens inside, or who want to work on the port.
+Building it is in [BUILDING.md](BUILDING.md).
+
+- [How it works](#how-it-works)
+- [What has been tested](#what-has-been-tested)
+- [Performance](#performance)
+- [Online services are blocked](#online-services-are-blocked)
+- [Resolution](#resolution)
+- [Controller support in the menus](#controller-support-in-the-menus)
+- [Gyro steering](#gyro-steering)
+- [Debug menu (performance settings)](#debug-menu-performance-settings)
+- [The port's folder and the first-start setup](#the-ports-folder-and-the-first-start-setup)
+- [Source layout](#source-layout)
+
+## How it works
+
+The Android game is a 32-bit ARM program; Switch homebrew runs 64-bit code only. The loader:
+
+1. **Runs the 32-bit code through a translator.** [Dynarmic](https://github.com/azahar-emu/dynarmic)
+   (the recompiler used by 3DS emulators) translates the game's ARM code to the host CPU.
+2. **Loads the game's `.so` files itself** (`src/core/elf.cpp`) into a 32-bit guest address
+   space and links them against host implementations of everything they import.
+3. **Re-implements the Android system libraries the game uses** (`src/hle/`): about 330 libc,
+   math and pthread functions, plus OpenGL ES 2.0, the Android log and the bitmap API.
+   Calls go guest → `svc` stub → C++ function, with soft-float ARM calling-convention
+   marshalling (`src/core/abi.h`).
+4. **Fakes the Java side** (`src/hle/jni/`): a JNI environment with on-demand classes. The
+   game's Java glue (`GameActivityMain`, `RunLoop`, `AssetManager`, MOGA controller, FMOD's
+   audio device, `Paint`/`Bitmap` text rendering) is re-implemented in C++.
+5. **Drives the Android lifecycle** (`src/main.cpp`) the way `GameActivityMain` does: create,
+   start, resume, surface created/changed, then one run-loop tick per frame.
+
+The Switch-specific parts are in `src/platform/platform_switch.cpp` (EGL/Mesa, HID, touch,
+audout, memory) and a small Dynarmic patch (`patches/dynarmic-switch.patch`). The patch makes
+the JIT write code through one mapping and run it from another, as Horizon requires.
+
+## What has been tested
+
+Tested on the desktop build with the original 1.3.128 APK and OBB:
+
+| Part | State |
+|---|---|
+| Loading + linking the game's 5 libraries | working |
+| Start-up: EA / Firemonkeys logos, title screen, loading | working |
+| EA User Agreement screen, text rendering (fonts from the APK) | working |
+| Touch input (tapping CONFIRM) | working |
+| First race: 3D world, cars, HUD, AI opponents | working |
+| Steering with the analog stick (game sees a MOGA Pro gamepad) | working |
+| Music and sound effects (FMOD) | working (recorded on desktop) |
+| Save data (`files/var/nfstr_save.sb`) | working |
+| Online services (EA servers, telemetry) | blocked; the game runs fully offline |
+| Playing every menu with the controller (touch still works) | working |
+| Gyro steering (optional, buttons unchanged) | working on desktop with simulated tilt; not yet tried on a console |
+| Debug menu with performance settings (ZL + ZR + Minus) | working on desktop; the clock and VSync settings only act on a console and are untested there |
+| GL calls on their own thread, redundant GL calls dropped | working on desktop (rendering checked against the unthreaded path) |
+| Direct guest-memory access in the Switch JIT | working in the ARM64 build under qemu; not yet tried on a console |
+| Random crash at start-up (a bug in the game's texture loading) | fixed in the loader (`src/game/fixes.cpp`) |
+| Rare crash loading into a race (a timing function reaching a missing object) | guarded in the loader (`src/game/fixes.cpp`) |
+| 720p handheld / 1080p docked | working (1080p rendering checked on desktop) |
+| First-start setup from the APK or `.xapk`, fixing misplaced files | working on desktop; the Switch's setup screen and its restart are not yet confirmed on many consoles |
+| Same start-up on ARM64 with the Switch memory/JIT model (qemu) | working |
+| Switch build (`NFSMostWanted2012-<version>.nro`) | runs on the console (Atmosphère, emuMMC); built with devkitA64 (GCC 16.1, libnx, switch-mesa 20.1). The first test build froze the console once (cause not known) |
+
+## Performance
+
+The goal is a steady 30 fps at the Switch's normal (stock) clocks. Measured with a virtual
+clock, the game moves by the real time between frames but never by more than about 1/30 s:
+at 60 fps it still runs at normal speed, below 30 fps it runs in slow motion. So holding 30
+is what matters.
+
+Where a race frame's time went on the game's main thread, before the work below (desktop
+test machine, detail level Medium, `cmd profile`): about 11 ms of translated game code (about
+2 million ARM instructions) plus about 11 ms in host calls, almost all of it inside the GL
+driver for roughly 4,000–5,000 GL calls. What the loader does about it:
+
+- **GL on its own thread** (`src/hle/gl_queue.cpp`). The game makes all of its GL calls from
+  its main thread, in between its own code. Each call is now only written into a queue
+  (with a copy of any data it points to) and a separate GL thread, which owns the context,
+  runs them. On the Switch that thread gets core 2 to itself (the game's threads use core 1,
+  its main thread core 0). The buffer swap and its wait for the screen refresh also happen on
+  the GL thread, overlapping the next frame's game code; at most one frame is queued ahead.
+  In a race the game makes only calls that return nothing, so its thread never waits for the
+  GL thread except at that swap. The loader's own overlay is drawn on the GL thread too.
+  Main-thread time spent on GL calls: about 11 ms per frame before, under 1 ms after.
+- **Redundant GL calls dropped** (`src/hle/gles.cpp`). The game re-binds textures and buffers
+  that are already bound, re-sends unchanged uniform values and switches its vertex arrays off
+  after every draw and on again before the next. Those calls are filtered out before they reach
+  the queue: about 1,650 per frame, leaving roughly 1,400–1,700 instead of 4,000–5,000.
+  Screenshots with and without the filter are identical apart from the game's animations.
+- **Direct memory access in the JIT** (Switch). Horizon has no user-mode fault handling, so
+  the translated code went through a page-table lookup for every load and store. It now adds
+  the guest-memory base directly, as on the desktop; a small Dynarmic patch allows this without
+  a fault handler. Worth about 5 % of the game code's time (desktop and qemu measurements).
+- **Atomic operations** (Switch). The game's code does about 4,600 atomic updates (LDREX/STREX)
+  per frame on its main thread in a race. On the Switch each one goes through Dynarmic's global
+  exclusive monitor, which scanned the reservation of all 256 possible guest threads on every
+  store; it now scans only the handful in use (Dynarmic patch). With the Switch's memory model
+  on the desktop, the main thread's time in the monitor went from about 9 % to under 0.5 %.
+- **OBB reading in native code** (`src/game/native.cpp`). In a race the game streams the
+  world from the OBB, a zip archive with encrypted entries, on its main thread: every byte was
+  decrypted, copied and CRC-checked by translated ARM code, a byte at a time (about a tenth of
+  the main thread's time while streaming, in short bursts that showed as stutter). The
+  decryption loop, the copy loop and `crc32` now run as native code (the Switch's CPU has
+  CRC-32 instructions), with bit-identical results.
+- **Floating-point status flags not tracked** (Switch). After every block of translated code
+  that does floating point, Dynarmic's ARM64 backend cleared and read back the CPU's
+  floating-point status register, to keep the guest's cumulative exception flags. None of
+  the game's libraries ever reads those flags (no `VMRS rX, FPSCR` in their code), so a small
+  Dynarmic option now skips that (`NFSMW_FP_FLAGS=1` restores it for comparisons).
+- **Medium detail level** by default (see the debug menu notes): about 18 % less game code
+  and a quarter fewer GL calls than Highest.
+
+What remains is the game's own code, translated: about 3 million ARM instructions per frame
+in a race (Low detail saves only about 5 % of that; it mostly saves GL calls).
+`log.txt` gets a summary every 10 seconds (frame rate, slowest frame, game time per frame,
+GL thread load, resolution, detail level, clocks), so a console's numbers come back with the
+log:
+`perf: 27.3 fps (frame 36.6 ms, slowest 52 ms) | game 31.2 ms/frame | GL thread 64% busy, waited 2.1
+ms/frame, swap 4.0 ms/frame | ... | game code (CPU, core 0): a higher CPU clock helps`.
+The last part names what holds the frame rate back: the game's code (main thread), the GL
+driver (GL thread), or the GPU (time spent in the buffer swap waiting for it).
+The defaults therefore leave all clocks at stock. If the frame-rate counter shows the game
+below 30 fps on a console, the debug menu can raise the CPU clock (1224 MHz is a clock some
+Switch games use themselves). These numbers come from the desktop build; real hardware will
+tell how much headroom is left.
+
+## Online services are blocked
+
+The loader never lets the game reach EA's servers. Everything the game uses to go online is
+refused in `src/hle/net_block.cpp`. That covers sockets (`socket`, `connect`, `send`, ...) and
+name lookups (`getaddrinfo`, `gethostbyname`). On top of that:
+
+- the Switch build does not start the console's network service at all;
+- the game is told the device has no network (EA Nimble `Network.getStatus()` returns `NONE`);
+- telemetry is switched off before the game starts (`files/enable.telemetry` = `0`);
+- requests to open web pages or the store are ignored.
+
+Career, races, cars and saves all work offline. Features that need EA's servers (Autolog,
+online leaderboards, EA account, in-game store and update checks) are unavailable. The log
+shows each blocked function the first time the game tries it
+(`online services blocked: socket() refused`) and, at exit, how many calls were refused.
+
+## Resolution
+
+The resolution is chosen when the game starts:
+
+| Started in | Renders at |
+|---|---|
+| Handheld (or tabletop) | 1280 × 720 |
+| Docked | 1920 × 1080 |
+
+The game's interface scales with the screen, so menus and HUD keep the same proportions at
+both sizes. The game reads its screen size only once, at start-up; it cannot switch while
+running. If you dock or undock while playing, it keeps its start-up resolution and the
+console scales the picture to fit the new screen. Restart the game to get the native
+resolution for the new mode. For the best handheld frame rate, start the game in handheld
+mode; a game started docked keeps rendering 1080p after you undock.
+
+## Controller support in the menus
+
+The menus were made for touch, so the loader watches which buttons the game
+draws each frame and where (`src/game/ui_nav.cpp`). It marks the highlighted one in the
+game's own style (`src/game/overlay.cpp`): a thin frame in the game's accent red just outside
+the button, bright corner brackets like the game's own selection markers, a soft red glow
+and, a moment after it arrives and then every few seconds, a slanted light sweeping across
+the button at the angle of the game's slanted buttons. Nothing is drawn over the button
+itself, so slanted buttons keep their shape. The highlight glides from button to button,
+breathes slowly, closes in and flashes when A is pressed; A "taps" it. The overlay's
+geometry goes to the GPU in one or two draw calls per frame. A popup is handled before the screen behind it. After a
+press, the button that appears in the same place on the next screen ("continue", "OK") is
+highlighted automatically. Buttons that need EA's servers are never picked first. The car
+grid, driver profile and store already have the game's own controller support, with its own
+highlight, so there the D-pad and A go straight to the game.
+
+## Gyro steering
+
+Tilt the console, or the Pro Controller / Joy-Cons, like a steering wheel. It is switched in the
+game: **Options > Controls > TILT TO STEER** (also in the pause menu under **Controls**); a
+"GYRO: ON / OFF" label on that tile shows the current state. The left stick still steers and takes
+over whenever you move it. Holding the console level drives straight; about 30 degrees of tilt is
+full lock.
+
+The choice is saved in `settings.ini` in the port's folder (together with the debug menu's settings), which also has two optional settings:
+`gyro_max_angle` (degrees of tilt for full lock, 10-60; smaller is more sensitive) and
+`gyro_invert` (set to `on` if the car turns the wrong way). The game's own tilt mode cannot
+be used with a gamepad connected; it only asks you to disconnect it. That is why the loader
+does the tilt steering itself (`src/game/motion.cpp`).
+
+## Debug menu (performance settings)
+
+Hold **ZL + ZR** and press **Minus** (the order does not matter) to open the port's own menu.
+The same combination, **B** or **+** closes it. Opening it during a race pauses the race first
+(with the game's own pause), and while it is open the game gets no input. ZL and ZR do nothing
+in this game, so the combination never triggers a game action.
+
+**Up/Down** picks a setting, **Left/Right** or **A** changes it. The touch screen works too:
+tap a row, tap the left or right half of a value to step it down or up, tap outside to close.
+Each setting shows a line of help, and a warning when the chosen value can make the game run
+worse. The bottom line shows the live frame rate, frame time and GL calls, so the effect of a
+change is visible right away. Changes are saved immediately to `settings.ini` in the port's folder.
+
+| Setting | Choices | Recommended (default) | What it does |
+|---|---|---|---|
+| Frame rate limit | 30 / 60 / off | **30** | The game is made for 30 fps. 60 only helps if the game really reaches it. |
+| VSync | on / off | **on** | Off can tear. With 30 fps and VSync the display shows every second refresh (swap interval 2). |
+| 3D resolution | 100 % – 50 % | **100 %** | Draws the race scene at a lower resolution and stretches it back; menus and HUD stay sharp. Only acts at detail level Highest (see below). |
+| CPU clock | stock (1020) / 1224 / 1428 / 1581 / 1785 MHz | **stock** | The translated game code runs on the CPU. Raise it only if the counter stays below 30 fps. |
+| GPU clock | auto / stock / 307.2 – 768 MHz | **stock** | The game is light on the GPU. Auto = 460.8 MHz handheld (Nintendo's highest handheld clock), stock when docked. |
+| Memory clock | stock / 1331.2 / 1600 MHz | **stock** | 1600 MHz is the docked memory clock; Nintendo also uses it in handheld mode. |
+| Detail level | highest / high / medium / low | **medium** | The game's own detail tier. Applies the next time the game starts. |
+| GL on its own core | on / off | **on** | The GL thread described under [Performance](#performance). Applies at the next start. |
+| Direct memory access | on / off | **on** | Switch only: the JIT accesses guest memory directly. Turn it off if the game crashes. Next start. |
+| Frame-rate counter | off / FPS / full | off | Top-left corner. Full adds frame times, GL calls, clocks and resolution. |
+
+"Restore recommended settings" puts all of these back to the defaults above. Values that make
+the game slower are allowed on purpose (that is the point of a test menu); the help line says
+so when one is picked.
+
+Notes:
+
+- **Clocks** are left at stock unless you change them. The choices only use rates that Nintendo's own performance profiles use (nothing above
+  1785 MHz CPU / 768 MHz GPU / 1600 MHz memory). They are set through `clkrst` (`pcv` before
+  firmware 8.0) and re-applied when the system resets them (dock/undock, sleep). The stock
+  clocks are given back when the game goes to the HOME menu and when it is closed: the loader
+  asks to be notified of both (focus mode "suspend with notification", and an exit lock only
+  while custom clocks are in use), so closing from HOME first restores the clocks, then lets
+  the system end the game. At stock clocks the exit is never locked, so the system can always
+  close the port. If sys-clk
+  is installed, it may override them.
+- **Detail level**: the game chooses its tier once at start-up from a score the loader reports
+  (`getPerformanceScore()`); left alone it would pick Highest on the Switch. Highest adds a
+  full-screen speed-blur pass, for which the scene is drawn into an off-screen buffer; that
+  buffer is what the 3D resolution setting shrinks. High looks like Highest without the blur
+  and costs about the same CPU time. Medium and Low draw about a quarter fewer objects
+  (3,500–5,100 GL calls per frame in a race instead of 5,300–6,700) and the game code needs
+  about 18 % less CPU time (10.4 instead of 12.7 ms per frame on the desktop test machine).
+  The difference on screen is small (mostly car reflections and the missing speed blur).
+  If the counter shows the game holding 30 fps with room to spare, try High or Highest (and,
+  at Highest, a lower 3D resolution if the GPU is the limit); if it stays below 30, try Low.
+- The 3D resolution is applied live: the loader allocates the game's screen-size render targets
+  at the smaller size and scales viewports while they are bound (`src/hle/gles.cpp`).
+
+## The port's folder and the first-start setup
+
+The port finds its files in the folder it was started from, so the folder and the `.nro`
+can be renamed or moved. `settings.ini`, `log.txt` and `save/` are created at the first start.
+
+The game keeps all of its career in one binary file (`nfstr_save.sb`, EA's chunked SBIN
+format): money, reputation, cars and events are records inside it, so they cannot live in
+separate files without rewriting the game's save code. `save/progress/` holds that file alone,
+so backing up or restoring a career is one file. The CPU and memory information the game reads
+from `/proc` and `/sys` is built into the `.nro` (RomFS, from `res/romfs/`).
+
+Folders set up by earlier versions (`lib/`, `apk/`, `fs/`, `save/internal/`, `save/external/`,
+`save/system/`, the OBB next to the `.nro`) are reorganized into this layout automatically the
+first time the port starts, keeping the progress. The port's folder under its earlier names,
+`sd:/switch/NFSMostWanted/` (0.1.0 to 0.2.0, before the rename) and `sd:/switch/nfsmw/` (test builds), is
+emptied into the new folder the same way: the game files, saves and settings are moved (never
+overwriting anything), then the old version's `.nro`, guides, log and source code are removed,
+and the folder too if nothing else is left. That only happens when the old folder really holds
+this port's files (the game's libraries, the OBB or the saves). An older `.nro` of the port next
+to the running one is removed as well; a newer one never is.
+
+### First-start setup
+
+Players only copy their APK and OBB (or one `.xapk` / `.apks` bundle) into `game/`. When the
+libraries, the assets or the OBB are missing, the port sets itself up before anything else
+(`src/game/setup.cpp`):
+
+1. It fixes the usual copying mistakes: the libraries left in `lib/armeabi-v7a/` or loose in
+   `game/`, an extracted `assets` folder one level too deep or its contents loose in `game/`,
+   the OBB in a subfolder (an unzipped bundle's `Android/obb/...`) or under another name.
+2. What is still missing it takes out of the APK: the 5 `armeabi-v7a` libraries and the
+   `assets/` folder. In a bundle it reads the APK inside (stored, or compressed and unpacked
+   first) and copies the OBB out of it too. Each file is written through a `.part` file and
+   checked against the archive's CRC-32; compressed entries are unpacked with stb_image's
+   zlib decoder.
+3. A text screen shows the progress. Then the port asks the homebrew loader to start it again
+   (`envSetNextLoad`, with `--after-setup` so it never loops), so the game gets a clean screen.
+
+It stops with a clear message for an APK that only has the 64-bit build, a damaged archive or
+a full SD card. The APK is never changed or deleted; the setup screen says it can be deleted.
+
+## Source layout
+
+```
+CMakeLists.txt  builds the Switch .nro (devkitPro) and the Linux test build
+README.md, CHANGELOG.md, THIRD_PARTY.md, CONTRIBUTING.md, LICENSE
+docs/           install guide, these notes, building; images/ for the README
+.github/        issue and pull request templates
+src/
+  core/         guest memory + heap, ELF loader, Dynarmic CPU threads, host-call thunks
+  hle/          libc/libm/pthread/GLES2/Android APIs (GL thread: gl_queue), fake JNI + Java classes
+  game/         NFS-specific config, the port's folder layout (paths), first-start setup from the
+                player's APK (setup), controls (MOGA), gyro
+                steering (motion), controller menu navigation (ui_nav, overlay), debug menu
+                (debug_menu), performance settings (perf, prefs = settings.ini), fixes for game
+                bugs, native versions of hot game code (native), FMOD audio pump
+  platform/     Linux (desktop) and Switch backends
+tools/
+  prepare_sd.py     fills the port's game/ folder from a player's APK and OBB
+  make_release.py   packs the port, prepare_sd.py and the source into one release zip
+  gen_gles.py       GLES thunk generator;  profile.py  sampling-profile report
+  fetch_deps.sh     fetches the third-party sources in external/
+res/
+  icon.jpg                  the port's own Homebrew Menu icon (256x256)
+  switch-README.txt         the player's guide (README.txt next to the .nro), with the changelog
+  romfs/system/             CPU and memory files the game reads, built into the .nro
+  licenses/                 license texts of the components devkitPro provides
+cmake/          toolchain file for the ARM64 Linux test build
+patches/        the Dynarmic changes, as a patch against upstream
+external/       Dynarmic (with the patch applied) and stb
+```
