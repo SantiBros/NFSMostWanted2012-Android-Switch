@@ -11,7 +11,7 @@
 The original game, running on your Switch: not a phone emulator. Bring your own copy, drop it into
 one folder, and race through Fairhaven, handheld or docked.
 
-[![Latest release](https://img.shields.io/github/v/release/SantiBros/NFSMostWanted2012-Android-Switch?style=for-the-badge&label=download&color=e11d2e&logo=github&logoColor=white)](../../releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/SantiBros/NFSMostWanted2012-Android-Switch?include_prereleases&style=for-the-badge&label=download&color=e11d2e&logo=github&logoColor=white)](../../releases)
 [![Downloads](https://img.shields.io/github/downloads/SantiBros/NFSMostWanted2012-Android-Switch/total?style=for-the-badge&color=2b2f38)](../../releases)
 ![Nintendo Switch homebrew](https://img.shields.io/badge/Nintendo%20Switch-homebrew-2b2f38?style=for-the-badge)
 ![Android version 1.3.128](https://img.shields.io/badge/Android%20version-1.3.128-2b2f38?style=for-the-badge)
@@ -99,7 +99,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 
 <img src="docs/images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
 
-1. **Download.** On the [Releases](../../releases/latest) page, under **Assets**, download
+1. **Download.** On the [Releases](../../releases) page, under **Assets**, download
    `NFSMostWanted2012-0.2.5.zip` (not "Source code", which is only for developers) and unzip it on
    your computer.
 2. **Copy to the SD card.** Copy the `switch` folder from the zip to the root of your SD card.

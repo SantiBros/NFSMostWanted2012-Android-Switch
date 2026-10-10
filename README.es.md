@@ -11,7 +11,7 @@
 El juego original funcionando en tu Switch: no es un emulador de teléfono. Trae tu propia copia,
 ponla en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
 
-[![Última versión](https://img.shields.io/github/v/release/SantiBros/NFSMostWanted2012-Android-Switch?style=for-the-badge&label=descargar&color=e11d2e&logo=github&logoColor=white)](../../releases/latest)
+[![Última versión](https://img.shields.io/github/v/release/SantiBros/NFSMostWanted2012-Android-Switch?include_prereleases&style=for-the-badge&label=descargar&color=e11d2e&logo=github&logoColor=white)](../../releases)
 [![Descargas](https://img.shields.io/github/downloads/SantiBros/NFSMostWanted2012-Android-Switch/total?style=for-the-badge&label=descargas&color=2b2f38)](../../releases)
 ![Nintendo Switch homebrew](https://img.shields.io/badge/Nintendo%20Switch-homebrew-2b2f38?style=for-the-badge)
 ![Versión Android 1.3.128](https://img.shields.io/badge/versi%C3%B3n%20Android-1.3.128-2b2f38?style=for-the-badge)
@@ -105,7 +105,7 @@ propio juego para manejar con control.</sub>
 
 <img src="docs/images/install-steps.es.png" alt="Instalar en 4 pasos: descarga el zip, copia la carpeta switch a la SD, agrega tu APK y tu OBB a la carpeta game, abre con R + cualquier juego" width="100%">
 
-1. **Descarga.** En la página de [Releases](../../releases/latest), en la sección **Assets**,
+1. **Descarga.** En la página de [Releases](../../releases), en la sección **Assets**,
    descarga `NFSMostWanted2012-0.2.5.zip` (no "Source code", que es solo para desarrolladores) y
    descomprímelo en tu computadora.
 2. **Copia a la SD.** Copia la carpeta `switch` del zip a la raíz de tu tarjeta SD.

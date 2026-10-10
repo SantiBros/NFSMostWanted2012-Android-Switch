@@ -69,7 +69,7 @@ and `adb pull` copies it (and the OBB from `/sdcard/Android/obb/com.ea.games.nfs
 
 <img src="images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
 
-1. On the [Releases](../../../releases/latest) page, under **Assets**, download
+1. On the [Releases](../../../releases) page, under **Assets**, download
    `NFSMostWanted2012-<version>.zip`. (Not "Source code (zip)": that is only the source code, for
    developers.) Unzip it on your computer.
 2. Copy the `switch` folder inside it to the **root** of your SD card. (If your SD card already has

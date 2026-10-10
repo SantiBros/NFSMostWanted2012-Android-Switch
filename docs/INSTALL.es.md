@@ -72,7 +72,7 @@ Si sabes usar `adb`: `adb shell pm path com.ea.games.nfs13_row` muestra dónde e
 
 <img src="images/install-steps.es.png" alt="Instalar en 4 pasos: descarga el zip, copia la carpeta switch a la SD, agrega tu APK y tu OBB a la carpeta game, abre con R + cualquier juego" width="100%">
 
-1. En la página de [Releases](../../../releases/latest), en la sección **Assets**, descarga
+1. En la página de [Releases](../../../releases), en la sección **Assets**, descarga
    `NFSMostWanted2012-<versión>.zip`. (No "Source code (zip)": eso es solo el código fuente, para
    desarrolladores.) Descomprímelo en tu computadora.
 2. Copia la carpeta `switch` que trae a la **raíz** de tu tarjeta SD. (Si tu tarjeta ya tiene una
