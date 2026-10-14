@@ -12,9 +12,9 @@ All notable changes to the port. The release zip's `README.txt` carries the same
   (in the new `cache/` folder) and, from the second start on, translates them ahead of time:
   for the loading screens while the game starts up, and for the races while the game waits
   for the graphics at the end of each frame. On the PC test build, with the cache from an
-  earlier session: the garage loads in 0.6 s instead of 2.8 s and the race in 3.6 s instead
-  of 7.9 s. Turn it off with `jit_cache=off` in `settings.ini`; `cache/` can be deleted at
-  any time.
+  earlier session, the garage's loading thread needs 0.6 s instead of 2.8 s and the race's
+  3.6 s instead of 7.9 s (the console is slower, but gains in the same way). Turn it off
+  with `jit_cache=off` in `settings.ini`; `cache/` can be deleted at any time.
 - Decompressing the game data (zlib's `inflate_fast`) and hashing it now run as native code,
   bit-identical to the game's own code.
 
