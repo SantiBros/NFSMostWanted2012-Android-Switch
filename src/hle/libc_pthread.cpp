@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "core/elf.h"
+#include "dynarmic/interface/compile_stats.h"
 #include "hle/hle.h"
 #include "platform/thread.h"
 
@@ -365,7 +366,12 @@ int h_create(u32 out, u32 attr, u32 start, u32 arg) {
     u32 id = rec->id;
     LOGD("pthread_create -> thread %u, entry %s", id, elf::describe(start).c_str());
     rec->th = platform::spawn_thread([rec, id, start, arg, stack_size, stack_base] {
-        cpu::GuestThread* t = cpu::attach_current_thread(stack_size, stack_base, id);
+        char name[16];
+        std::snprintf(name, sizeof name, "guest-%u", id);
+        platform::set_thread_name(name);
+        const auto t0 = std::chrono::steady_clock::now();
+        const unsigned long long cpu0 = platform::thread_cpu_ns();
+        cpu::GuestThread* t = cpu::attach_current_thread(stack_size, stack_base, id, start);
         rec->stack_base = t->stack_base;
         rec->stack_size = t->stack_size;
         u32 ret = 0;
@@ -380,7 +386,16 @@ int h_create(u32 out, u32 attr, u32 start, u32 arg) {
         }
         rec->retval = ret;
         cpu::detach_current_thread();
-        LOGD("thread %u finished", id);
+        // What a thread's life cost (the game starts a new thread for each
+        // loading screen, so these lines time the loads).
+        const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        const double cpu_s = (double)(platform::thread_cpu_ns() - cpu0) / 1e9;
+        const Dynarmic::CompileStats& cs = Dynarmic::t_compile_stats;
+        if (secs >= 0.5)
+            LOGI("thread %u finished after %.1f s: CPU %.1f s, of which %.2f s translating game code (%llu blocks)",
+                 id, secs, cpu_s, (double)cs.ns / 1e9, (unsigned long long)cs.blocks);
+        else
+            LOGD("thread %u finished", id);
     }, 1 << 20);
     if (!rec->th) return EAGAIN_;
     if (rec->detached) {

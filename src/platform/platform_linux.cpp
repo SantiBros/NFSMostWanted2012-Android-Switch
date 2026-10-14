@@ -399,6 +399,17 @@ void audio_write(const s16* samples, int frames) {
 }
 
 void audio_pause() {}
+
+bool memory_usage(u64& used, u64& total) {
+    FILE* f = std::fopen("/proc/self/statm", "r");
+    if (!f) return false;
+    unsigned long size = 0, resident = 0;
+    const bool ok = std::fscanf(f, "%lu %lu", &size, &resident) == 2;
+    std::fclose(f);
+    used = (u64)resident * 4096;
+    total = 0;
+    return ok;
+}
 AudioStats audio_stats() { return {}; }
 
 }  // namespace platform

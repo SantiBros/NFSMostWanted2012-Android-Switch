@@ -127,6 +127,7 @@ sd:/switch/NFSMostWanted2012/
 ├── save/
 │   ├── progress/                     your career: nfstr_save.sb
 │   └── settings/                     the game's own settings: language, version, agreement
+├── cache/                            the port's own cache (translated-code lists; safe to delete)
 ├── source/                           the port's source code (not needed to play)
 ├── settings.ini                      the port's settings (created at the first start)
 └── log.txt                           what happened at the last start
@@ -172,7 +173,7 @@ icon** from your APK, so the Homebrew Menu shows the Need for Speed icon (needs
 With the SD card as drive `E:` (all on one line):
 
 ```
-python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.2.6.nro --out E:\switch\NFSMostWanted2012
+python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.2.7.nro --out E:\switch\NFSMostWanted2012
 ```
 
 macOS / Linux: `python3 prepare_sd.py ... --out /Volumes/SD/switch/NFSMostWanted2012`.
@@ -192,6 +193,7 @@ The script checks your files and says what it did: `libapp.so sha256 a73dcc17...
 | **The game crashes or the screen stays black** | In `settings.ini`, try `direct_memory=off`, then `gl_thread=off` (one at a time; each takes effect at the next start). |
 | **Low frame rate** | Open the debug menu (ZL + ZR + Minus) and set *Frame-rate counter: full*. `log.txt` gets a `perf:` line every 10 seconds that ends by naming what holds the frame rate back (game code, graphics driver or GPU). Raising the CPU clock helps when it says "game code". |
 | **Short stutters although the counter shows 30** | The `perf:` lines in `log.txt` count them ("hitches") and show how long the game waited for the SD card ("game waited"). Please [report](#reporting-a-bug) them with `log.txt`. A slow or nearly full SD card makes them worse. |
+| **Loading is slow** | The first start after installing (or after deleting `cache/`) is the slowest: from the second start on, the port translates the game's code ahead of time (the JIT cache, in `cache/`). `log.txt` has a line `thread ... finished after ...` for each loading screen; please include it in a report. |
 | **The sound crackles** | Lower *Sound volume* in the debug menu (ZL + ZR + Minus). 70% is the default; 100% is the game's full mix, which is cut off at loud moments. If the sound breaks up instead, `log.txt` counts the "dropouts": please report it. |
 | **The console freezes** | Wait a moment and try to close the game from the HOME menu before you hold the power button: forcing the console off while it writes to the SD card can damage files. |
 | **The Homebrew Menu shows the port twice** | An older `.nro` is still in the folder: delete it (or start the new version once, which removes it). |

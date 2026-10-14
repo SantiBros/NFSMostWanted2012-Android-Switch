@@ -20,4 +20,9 @@ void boost_current_thread();
 void reserve_core_for_gl(int core);
 void detach_thread(ThreadHandle* t);  // frees the handle without waiting
 
+// CPU time the calling thread has used so far, in nanoseconds.
+unsigned long long thread_cpu_ns();
+// Name the calling thread (shows in debuggers and the desktop's process tools).
+void set_thread_name(const char* name);
+
 }  // namespace platform

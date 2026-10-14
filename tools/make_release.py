@@ -69,6 +69,7 @@ COMPONENTS = [
     ("robin-map", "hash tables (used by Dynarmic)", "MIT", "external/dynarmic/externals/robin-map/LICENSE"),
     ("Boost (ICL, Variant)", "header-only libraries (used by Dynarmic)", "BSL-1.0", "res/licenses/boost.txt"),
     ("stb (stb_truetype, stb_image)", "font rendering; unpacking the APK", "MIT or public domain", "external/stb/LICENSE"),
+    ("zlib (inffast.c, adapted)", "decompressing the game data natively", "zlib", "res/licenses/zlib.txt"),
     ("libnx", "Nintendo Switch homebrew library", "ISC", "res/licenses/libnx.txt"),
     ("Mesa", "OpenGL ES driver (switch-mesa)", "MIT", "res/licenses/mesa.txt"),
     ("libdrm_nouveau", "GPU interface for Mesa", "MIT", "res/licenses/libdrm_nouveau.txt"),

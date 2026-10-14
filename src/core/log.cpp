@@ -35,6 +35,7 @@ const auto g_start = std::chrono::steady_clock::now();
 constexpr size_t kWakeAt = 16 * 1024;  // pending bytes that wake the writer early
 
 void writer_thread() {
+    platform::set_thread_name("log");
     for (;;) {
         {
             std::unique_lock lk(g_mutex);

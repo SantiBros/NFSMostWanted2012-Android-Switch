@@ -78,6 +78,9 @@ propio juego para manejar con control.</sub>
   se prepara solo la primera vez que lo abres, con una pantalla de progreso.
 - **A prueba de errores.** Si las librerías quedaron dentro de `lib/armeabi-v7a/`, la carpeta de
   assets en el lugar equivocado o el OBB con otro nombre, el port los mueve a su sitio solo.
+- **Más rápido cada vez que lo abres.** El port recuerda qué partes del código del juego ya tradujo
+  (la caché JIT) y desde entonces las traduce por adelantado: pantallas de carga más cortas y menos
+  tirones.
 - **Totalmente sin conexión.** Todos los servicios en línea están bloqueados; la carrera, los autos
   y las partidas guardadas funcionan sin internet.
 - **Tu partida en un solo archivo** (`save/progress/nfstr_save.sb`): fácil de respaldar, y se
@@ -106,7 +109,7 @@ propio juego para manejar con control.</sub>
 <img src="docs/images/install-steps.es.png" alt="Instalar en 4 pasos: descarga el zip, copia la carpeta switch a la SD, agrega tu APK y tu OBB a la carpeta game, abre con R + cualquier juego" width="100%">
 
 1. **Descarga.** En la página de [Releases](../../releases), en la sección **Assets**,
-   descarga `NFSMostWanted2012-0.2.6.zip` (no "Source code", que es solo para desarrolladores) y
+   descarga `NFSMostWanted2012-0.2.7.zip` (no "Source code", que es solo para desarrolladores) y
    descomprímelo en tu computadora.
 2. **Copia a la SD.** Copia la carpeta `switch` del zip a la raíz de tu tarjeta SD.
 3. **Agrega tu juego.** Copia tu APK y tu OBB en `switch/NFSMostWanted2012/game/`. No los
@@ -126,7 +129,7 @@ propio juego para manejar con control.</sub>
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.2.6.nro   el port
+├── NFSMostWanted2012-0.2.7.nro   el port
 ├── README.txt                    la guía del jugador (en inglés)
 ├── LICENSES.txt                  componentes de código abierto y sus licencias
 ├── game/                         TUS archivos del juego (nunca los compartas)
@@ -137,6 +140,7 @@ sd:/switch/NFSMostWanted2012/
 ├── save/
 │   ├── progress/                 tu carrera: dinero, reputación, autos, eventos
 │   └── settings/                 los ajustes del propio juego (idioma, ...)
+├── cache/                        la caché del port: acelera las siguientes cargas (se puede borrar)
 ├── source/                       el código fuente del port (no hace falta para jugar)
 ├── settings.ini                  los ajustes del port (también se cambian en el menú de depuración)
 └── log.txt                       qué pasó la última vez: adjúntalo al reportar un error
@@ -197,7 +201,8 @@ recta; unos 30° de inclinación es el giro máximo. Todos los botones siguen fu
 | Música y efectos de sonido | ✅ Funciona |
 | Partidas guardadas (se conservan al actualizar) | ✅ Funciona |
 | 720p portátil / 1080p en el dock | ✅ Funciona (la resolución se elige al abrir el juego) |
-| FPS | ⚠️ Todavía en ajuste en consola real: el juego apunta a 30 FPS, y en carreras con mucha acción puede bajar de eso con los relojes de fábrica. El menú de depuración permite subir el reloj de la CPU. La 0.2.6 quita las causas principales de los tirones cortos (leer los datos del juego y el log desde la tarjeta SD). |
+| FPS | ⚠️ Todavía en ajuste en consola real: el juego apunta a 30 FPS, y en carreras con mucha acción puede bajar de eso con los relojes de fábrica. El menú de depuración permite subir el reloj de la CPU. La 0.2.6 y la 0.2.7 quitan las causas principales de los tirones cortos encontradas hasta ahora. |
+| Cargas | ✅ Más rápidas desde la 0.2.7, sobre todo desde la segunda vez que lo abres (la caché JIT) |
 | Giroscopio, relojes personalizados | 🧪 Nuevo, aún sin confirmar en muchas consolas: se agradecen comentarios |
 | Funciones en línea (Autolog, clasificaciones, cuenta EA, tienda) | ❌ No disponibles: el port no usa internet a propósito |
 
@@ -325,7 +330,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-El resultado es `build-switch/NFSMostWanted2012-0.2.6.nro`. Los detalles están en
+El resultado es `build-switch/NFSMostWanted2012-0.2.7.nro`. Los detalles están en
 [docs/BUILDING.md](docs/BUILDING.md) (en inglés).
 
 ## Créditos

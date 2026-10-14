@@ -51,6 +51,9 @@ void finish();
 // Queue the buffer swap. Waits until the previous frame's swap has finished,
 // so at most one frame is in flight.
 void swap(void (*do_swap)());
+// Work for the calling (game) thread while swap() would otherwise wait: called
+// repeatedly until the wait is over or it returns false.
+void set_idle_work(bool (*step)());
 
 // Statistics: share of time the GL thread was busy (0..1, not counting buffer
 // swaps, which mostly wait for the display) since the last call, and the time

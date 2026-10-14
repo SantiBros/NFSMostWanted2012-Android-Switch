@@ -4,6 +4,8 @@
 #pragma once
 
 #include <array>
+#include <atomic>
+#include <mutex>
 #include <initializer_list>
 #include <memory>
 
@@ -43,6 +45,14 @@ struct GuestThread {
     u64 excl_writes = 0;  // exclusive stores (STREX) that reached memory
     std::unique_ptr<Dynarmic::A32::Jit> jit;
     std::unique_ptr<Callbacks> callbacks;
+    bool is_main = false;
+    u64 jit_blocks = 0;                // blocks this JIT has translated (over every thread that used it)
+    u64 compile_blocks_at_attach = 0;  // the host thread's translation count when it attached
+    // A spare JIT that the JIT cache translates ahead into (core/jit_cache.h)
+    // while it waits in the pool; taking it stops that.
+    bool warming = false;
+    std::atomic<bool> warm_stop{false};
+    std::mutex warm_mutex;  // held by the JIT cache for each block it translates
 
     std::array<u32, 16>& regs();
     u32 errno_addr() const { return tls_base + 2 * 4; }  // TLS_SLOT_ERRNO
@@ -61,8 +71,14 @@ struct GuestThread {
 // an access outside guest memory is no longer caught (the game makes none).
 void init(bool direct_memory = false);
 // Create the guest context for the calling host thread.
-GuestThread* attach_current_thread(u32 stack_size, u32 existing_stack = 0, u32 id = 0);
+// entry: the guest function the thread starts in (0 = not known).
+GuestThread* attach_current_thread(u32 stack_size, u32 existing_stack = 0, u32 id = 0, u32 entry = 0);
 void detach_current_thread();
+// A JIT of its own, for no thread yet (core/jit_cache.h translates ahead into
+// it), and handing it to the pool of finished threads' JITs that new guest
+// threads take over. expected_blocks ranks it among them.
+GuestThread* create_spare(size_t code_cache_size);
+void pool_add_warming(GuestThread* t, u64 expected_blocks);
 GuestThread& current();
 GuestThread* current_or_null();
 

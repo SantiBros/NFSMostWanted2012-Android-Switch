@@ -2,6 +2,35 @@
 
 All notable changes to the port. The release zip's `README.txt` carries the same list.
 
+## [0.2.7]
+
+### Faster loading
+- **Translated code is reused.** The game's ARM code is translated for the Switch's CPU the
+  first time it runs, and the game starts a new thread for every loading screen, which used to
+  start with nothing translated. A new thread now takes over a finished thread's translations.
+- **New: the JIT cache.** The port remembers which parts of the game's code were translated
+  (in the new `cache/` folder) and, from the second start on, translates them ahead of time:
+  for the loading screens while the game starts up, and for the races while the game waits
+  for the graphics at the end of each frame. On the PC test build, with the cache from an
+  earlier session: the garage loads in 0.6 s instead of 2.8 s and the race in 3.6 s instead
+  of 7.9 s. Turn it off with `jit_cache=off` in `settings.ini`; `cache/` can be deleted at
+  any time.
+- Decompressing the game data (zlib's `inflate_fast`) and hashing it now run as native code,
+  bit-identical to the game's own code.
+
+### Fewer stutters
+- **0.2.6 read the game data one byte at a time through the C library** (the data cache had
+  no buffer in front of it), and on the Switch every one of those bytes made the library
+  check every open file. The data streams have a buffer again. This affected both the loading
+  screens and the races.
+- With the JIT cache, code a race needs for the first time (a police chase starting, the crash
+  camera) is usually translated before it runs, instead of stopping the game for a moment.
+
+### Added
+- `log.txt` now shows how long each loading screen took (`thread ... finished after ...`),
+  how much new code the main thread had to translate (`JIT:`), the JIT cache, the memory in
+  use, the texture formats the game uses and any shader the graphics driver rejects.
+
 ## [0.2.6]
 
 ### Fixed
@@ -73,5 +102,6 @@ First release.
 - One tidy folder (`game/` and `save/`), set up by `prepare_sd.py`, which can also give the port
   the game's own icon.
 
+[0.2.7]: ../../releases/tag/v0.2.7
 [0.2.6]: ../../releases/tag/v0.2.6
 [0.2.5]: ../../releases/tag/v0.2.5

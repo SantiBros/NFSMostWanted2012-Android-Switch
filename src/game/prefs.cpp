@@ -124,13 +124,17 @@ void save() {
                  "\n"
                  "# Run the game's graphics calls on their own CPU core (next start).\n"
                  "gl_thread=%s\n"
+                 "# Remember which parts of the game's code were translated for the Switch's CPU\n"
+                 "# (in cache/) and translate them ahead of time in later sessions: faster\n"
+                 "# loading, fewer stutters when something happens for the first time (next start).\n"
+                 "jit_cache=%s\n"
                  "# Switch: translated game code reads and writes its memory directly instead of\n"
                  "# through a lookup table (faster). Turn off if the game crashes (next start).\n"
                  "direct_memory=%s\n",
                  v.gyro_steering ? "on" : "off", v.gyro_max_angle, v.gyro_invert ? "on" : "off",
                  v.fps_limit ? std::to_string(v.fps_limit).c_str() : "off", v.vsync ? "on" : "off", v.scene_scale,
                  quality_text(v.quality), clock_text(v.cpu_khz).c_str(), clock_text(v.gpu_khz).c_str(),
-                 clock_text(v.mem_khz).c_str(), overlay_text(v.overlay), v.sound_volume, v.gl_thread ? "on" : "off",
+                 clock_text(v.mem_khz).c_str(), overlay_text(v.overlay), v.sound_volume, v.gl_thread ? "on" : "off", v.jit_cache ? "on" : "off",
                  v.direct_memory ? "on" : "off");
     std::fclose(f);
 }
@@ -144,7 +148,7 @@ void load() {
         g_startup = v;
         return;
     }
-    bool has_perf = false, has_sound = false;
+    bool has_perf = false, has_sound = false, has_jit = false;
     char line[256];
     while (std::fgets(line, sizeof line, f)) {
         char key[64] = {}, val[64] = {};
@@ -168,13 +172,17 @@ void load() {
             has_sound = true;
         }
         else if (!std::strcmp(key, "gl_thread")) v.gl_thread = parse_bool(val);
+        else if (!std::strcmp(key, "jit_cache")) {
+            v.jit_cache = parse_bool(val);
+            has_jit = true;
+        }
         else if (!std::strcmp(key, "direct_memory")) v.direct_memory = parse_bool(val);
     }
     std::fclose(f);
     v.cpu_khz = snap(v.cpu_khz, {1020000, 1224000, 1428000, 1581000, 1785000});
     v.gpu_khz = snap(v.gpu_khz, {307200, 384000, 460800, 614400, 768000});
     v.mem_khz = snap(v.mem_khz, {1331200, 1600000});
-    if (!has_perf || !has_sound) save();  // older file: add the settings it does not have yet
+    if (!has_perf || !has_sound || !has_jit) save();  // older file: add the settings it does not have yet
     g_startup = v;
     LOGI("settings: fps limit %s, vsync %s, 3D resolution %d%%, quality %s, clocks cpu %s gpu %s mem %s",
          v.fps_limit ? std::to_string(v.fps_limit).c_str() : "off", v.vsync ? "on" : "off", v.scene_scale,

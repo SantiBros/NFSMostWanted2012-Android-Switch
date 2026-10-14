@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "core/jit_cache.h"
 #include "platform/platform.h"
 
 namespace platform {
@@ -222,6 +223,7 @@ bool gl_should_close() {
         // game's threads are still running.
         LOGI("exit requested: restoring stock clocks and closing");
         clocks_exit();
+        jit_cache::save();
         logging::flush();
         std::fflush(nullptr);
         unlock_exit();
@@ -493,6 +495,11 @@ bool get_clocks(Clocks& c) {
 }
 
 bool is_docked() { return appletGetOperationMode() == AppletOperationMode_Console; }
+
+bool memory_usage(u64& used, u64& total) {
+    return R_SUCCEEDED(svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0)) &&
+           R_SUCCEEDED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0));
+}
 
 void tick() {
     // The system re-applies its own clocks after docking, sleep and other

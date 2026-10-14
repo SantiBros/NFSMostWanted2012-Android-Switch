@@ -133,9 +133,51 @@ driver for roughly 4,000–5,000 GL calls. What the loader does about it:
 
 What remains is the game's own code, translated: about 3 million ARM instructions per frame
 in a race (Low detail saves only about 5 % of that; it mostly saves GL calls).
+
+### Loading (0.2.7)
+
+The game starts a new thread for every loading screen. Sampling one (desktop, `perf` with
+Dynarmic's JIT map) put its time in four places: translating the game's code for that new
+thread (about a third: each guest thread had its own, empty JIT), zlib's `inflate_fast`
+(about a sixth), the C library's stdio refills (a sixth) and an FNV-1 hash over loaded data
+(a twelfth). What changed:
+
+- **Buffered OBB streams** (`src/hle/file_cache.cpp`). 0.2.6 opened the cached OBB streams
+  unbuffered, and the game reads much of its data a byte at a time: every byte went through
+  the C library's refill, which for an unbuffered stream first flushes every open output
+  stream (the Switch's newlib walks the whole list of open files each time). The streams now
+  have an 8 KiB buffer in front of the cache.
+- **JIT reuse** (`src/core/cpu.cpp`). A finished guest thread keeps its JIT, with everything it
+  translated, in a pool; the next new guest thread takes it over (the one with the most code)
+  instead of starting empty. The translated code stays valid: the game's code does not change.
+- **JIT cache** (`src/core/jit_cache.cpp`). Every block that gets translated is listed (its
+  location descriptor: address and mode bits), per kind of thread, in `cache/jit-main.bin` and
+  `cache/jit-workers.bin` in the port's folder; the lists are written in the background. In
+  the next session a background thread translates the loading threads' list into a spare
+  JIT (64 MiB of code cache on the Switch) while the game starts up, and that JIT goes to
+  the first loading thread the game starts after its first frames (only the game's own
+  threads, not the sound library's). The main thread translates its list while it waits for
+  the GL thread at the end of a frame, so the code that a race needs the first time (a police
+  chase starting, the crash camera...) is usually ready before it runs. The lists are tied
+  to a fingerprint of the game libraries and the port version, and only addresses inside the
+  game's libraries are kept. `jit_cache=off` in `settings.ini` (or `NFSMW_NO_JIT_CACHE=1`)
+  turns it off; deleting `cache/` starts the lists again.
+- **Native `inflate_fast` and FNV-1** (`src/game/native.cpp`): the same algorithms as the
+  game's (zlib 1.2.8's `inffast.c`, on the game's own `z_stream` and `inflate_state`),
+  verified against the game's code over thousands of calls with `NFSMW_VERIFY_NATIVE=1`
+  (which runs both and compares everything they write).
+
+Desktop measurements, startup and the first race of the test save (wall time of the game's
+loading threads): the garage load went from 2.8 s (0.2.6) to 1.4 s, 0.6 s with the JIT
+cache from an earlier session; the race load from 7.9 s to 5.3 s, 3.6 s with the cache. With
+the cache the main thread translated about 20 new blocks when the race started instead of
+18,000. The console's own numbers are in the `log.txt` lines `thread ... finished after ...`
+(each loading thread's time, CPU time and translation time) and in the `perf:` lines
+(`JIT: ... new blocks` on the main thread, `JIT cache: ...`).
 `log.txt` gets a summary every 10 seconds (frame rate, slowest frame, hitches, game time per
-frame, GL thread load, resolution, detail level, clocks, the OBB cache and the sound), so a
-console's numbers come back with the log:
+frame, GL thread load, resolution, detail level, clocks, new code translated on the main
+thread, the JIT cache, the OBB cache, the sound and the memory in use), so a console's
+numbers come back with the log:
 `perf: 27.3 fps (frame 36.6 ms, slowest 52 ms, 2 hitches) | game 31.2 ms/frame | GL thread 64% busy,
 waited 2.1 ms/frame, swap 4.0 ms/frame | ... | game code (CPU, core 0): a higher CPU clock helps |
 OBB cache: 108 MiB, 2704 block lookups (95% in memory), 869 card reads (108.6 MiB, 724 read ahead,
@@ -346,7 +388,8 @@ README.md, CHANGELOG.md, THIRD_PARTY.md, CONTRIBUTING.md, LICENSE
 docs/           install guide, these notes, building; images/ for the README
 .github/        issue and pull request templates
 src/
-  core/         guest memory + heap, ELF loader, Dynarmic CPU threads, host-call thunks, log
+  core/         guest memory + heap, ELF loader, Dynarmic CPU threads (and JIT reuse), JIT cache,
+                host-call thunks, log
   hle/          libc/libm/pthread/GLES2/Android APIs (GL thread: gl_queue; OBB cache: file_cache),
                 fake JNI + Java classes
   game/         NFS-specific config, the port's folder layout (paths), first-start setup from the

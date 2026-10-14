@@ -7,11 +7,13 @@
 #include <string>
 #include <chrono>
 #include <mutex>
+#include <new>
 #include <vector>
 
 #include <dynarmic/interface/A32/a32.h>
 #include <dynarmic/interface/A32/config.h>
 #include <dynarmic/interface/A32/coprocessor.h>
+#include <dynarmic/interface/compile_stats.h>
 #include <dynarmic/interface/exclusive_monitor.h>
 
 #include "core/elf.h"
@@ -371,30 +373,73 @@ void init(bool direct_memory) {
     }
 }
 
-GuestThread* attach_current_thread(u32 stack_size, u32 existing_stack, u32 id) {
-    if (t_current) return t_current;
-    auto* t = new GuestThread;
-    const bool is_main = (g_next_tid.load() == 1000 && id == 0);
-    t->id = id ? id : g_next_tid.fetch_add(1);
-    t->processor_id = alloc_processor_id();
-    t->callbacks = std::make_unique<Callbacks>();
-    t->callbacks->t = t;
+// Finished guest threads, kept with their JIT. The game starts a new thread
+// for every loading screen; a new JIT would first have to translate all of
+// the loading code again (about a third of a loading thread's time). A new
+// guest thread takes over a finished one's JIT instead, with everything it
+// has translated so far. The code it translated stays valid: the game's code
+// does not change while it runs.
+std::mutex g_pool_mutex;
+std::vector<GuestThread*> g_pool;
+constexpr size_t kPoolMax = 4;
+u32 g_initial_fpscr = 0;
+bool g_have_initial_fpscr = false;
+bool g_pool_off = std::getenv("NFSMW_NO_JIT_REUSE") != nullptr;
 
+GuestThread* take_pooled(bool allow_warming) {
+    if (g_pool_off) return nullptr;
+    std::lock_guard lk(g_pool_mutex);
+    // The one with the most translated code.
+    auto best = g_pool.end();
+    for (auto it = g_pool.begin(); it != g_pool.end(); ++it)
+        if ((allow_warming || !(*it)->warming) && (best == g_pool.end() || (*it)->jit_blocks > (*best)->jit_blocks)) best = it;
+    if (best == g_pool.end()) return nullptr;
+    GuestThread* t = *best;
+    g_pool.erase(best);
+    if (t->warming) {
+        // The JIT cache is still translating ahead into this JIT: stop it
+        // (it checks between blocks) and take the JIT as it is.
+        t->warm_stop = true;
+        std::lock_guard wl(t->warm_mutex);
+        t->warming = false;
+    }
+    return t;
+}
+
+void set_stack_and_tls(GuestThread* t, u32 stack_size, u32 existing_stack) {
     // bionic TLS block: slot 0 = self, slot 1 = thread id, slot 2 = errno
     t->tls_base = mem::heap_calloc(64, 4);
     mem::w32(t->tls_base + 0, t->tls_base);
     mem::w32(t->tls_base + 4, t->id);
     t->tpidruro = t->tls_base;
-
+    t->tpidrurw = 0;
     if (existing_stack) {
         t->stack_base = existing_stack;
         t->stack_size = stack_size;
+        t->owns_stack = false;
     } else {
         t->stack_size = stack_size;
         t->stack_base = mem::heap_alloc(stack_size, 4096);
         t->owns_stack = true;
         if (!t->stack_base) fatal("cannot allocate %u byte guest stack", stack_size);
     }
+}
+
+// A guest thread object with its JIT, not attached to any host thread yet.
+GuestThread* new_guest_thread(bool is_main, size_t code_cache_size) {
+    auto* t = new GuestThread;
+    t->processor_id = alloc_processor_id();
+    struct Undo {  // if creating the JIT fails (out of memory)
+        GuestThread* t;
+        ~Undo() {
+            if (t) {
+                free_processor_id(t->processor_id);
+                delete t;
+            }
+        }
+    } undo{t};
+    t->callbacks = std::make_unique<Callbacks>();
+    t->callbacks->t = t;
 
     A32::UserConfig cfg;
     cfg.callbacks = t->callbacks.get();
@@ -439,20 +484,82 @@ GuestThread* attach_current_thread(u32 stack_size, u32 existing_stack, u32 id) {
     for (int i = 0; i < 15; i++)
         if (i != 10 && i != 11) cfg.coprocessors[i] = std::make_shared<GenericCoproc>(i);
     cfg.coprocessors[15] = std::make_shared<CP15>(t);
-#if defined(__aarch64__)
-    cfg.code_cache_size = is_main ? 128u * 1024 * 1024 : 32u * 1024 * 1024;  // arm64 backend limit: 128 MiB
-#else
-    cfg.code_cache_size = is_main ? 256u * 1024 * 1024 : 64u * 1024 * 1024;
-#endif
+    cfg.code_cache_size = code_cache_size;
     t->jit = std::make_unique<A32::Jit>(cfg);
-    t->jit->Regs()[13] = t->stack_base + t->stack_size;
+    {
+        std::lock_guard lk(g_pool_mutex);
+        if (!g_have_initial_fpscr) {
+            g_initial_fpscr = t->jit->Fpscr();
+            g_have_initial_fpscr = true;
+        }
+    }
     t->jit->SetCpsr(0x10);
+    t->is_main = is_main;
+    undo.t = nullptr;
+    return t;
+}
+
+size_t default_code_cache(bool is_main) {
+#if defined(__aarch64__)
+    return is_main ? 128u * 1024 * 1024 : 32u * 1024 * 1024;  // arm64 backend limit: 128 MiB
+#else
+    return is_main ? 256u * 1024 * 1024 : 64u * 1024 * 1024;
+#endif
+}
+
+GuestThread* attach_current_thread(u32 stack_size, u32 existing_stack, u32 id, u32 entry) {
+    if (t_current) return t_current;
+    const bool is_main = (g_next_tid.load() == 1000 && id == 0);
+    // The JIT that the JIT cache prepares for loading threads goes to threads
+    // the game itself starts (its loading threads), not to the sound library's.
+    const elf::Module* em = entry ? elf::module_for(entry) : nullptr;
+    const bool allow_warming = em && em->name == "libapp.so";
+    GuestThread* t = is_main ? nullptr : take_pooled(allow_warming);
+    const bool reused = t != nullptr;
+    if (reused) {
+        t->pending_svc = 0;
+        t->has_pending = false;
+        t->call_depth = 0;
+        t->key_values.fill(0);
+        t->in_thunk = nullptr;
+        t->in_thunk_lr = 0;
+        t->thunk_calls = t->guest_insns = t->slow_reads = t->excl_writes = 0;
+        t->callbacks->bad_reads = 0;
+        t->jit->Regs().fill(0);
+        t->jit->ExtRegs().fill(0);
+        t->jit->SetFpscr(g_initial_fpscr);
+        t->jit->ClearExclusiveState();
+        t->jit->SetCpsr(0x10);
+    } else {
+        t = new_guest_thread(is_main, default_code_cache(is_main));
+    }
+    t->id = id ? id : g_next_tid.fetch_add(1);
+    set_stack_and_tls(t, stack_size, existing_stack);
+    t->jit->Regs()[13] = t->stack_base + t->stack_size;
+    t->compile_blocks_at_attach = Dynarmic::t_compile_stats.blocks;
     t_current = t;
     {
         std::lock_guard lk(g_threads_mutex);
         g_threads.push_back(t);
     }
+    if (reused)
+        LOGD("thread %u: reusing a JIT with %llu translated blocks", t->id, (unsigned long long)t->jit_blocks);
     return t;
+}
+
+GuestThread* create_spare(size_t code_cache_size) {
+    try {
+        return new_guest_thread(false, code_cache_size);
+    } catch (const std::bad_alloc&) {
+        return nullptr;  // not enough memory for its code cache
+    }
+}
+
+void pool_add_warming(GuestThread* t, u64 expected_blocks) {
+    t->jit_blocks = expected_blocks;
+    t->warming = true;
+    std::lock_guard lk(g_pool_mutex);
+    g_pool.push_back(t);
 }
 
 void detach_current_thread() {
@@ -463,9 +570,19 @@ void detach_current_thread() {
         std::lock_guard lk(g_threads_mutex);
         g_threads.erase(std::remove(g_threads.begin(), g_threads.end(), t), g_threads.end());
     }
-    free_processor_id(t->processor_id);
     if (t->owns_stack) mem::heap_free(t->stack_base);
     mem::heap_free(t->tls_base);
+    t->tls_base = t->stack_base = 0;
+    t->owns_stack = false;
+    t->jit_blocks += Dynarmic::t_compile_stats.blocks - t->compile_blocks_at_attach;
+    if (!t->is_main && !g_pool_off) {
+        std::lock_guard lk(g_pool_mutex);
+        if (g_pool.size() < kPoolMax) {
+            g_pool.push_back(t);  // keeps its processor id and JIT
+            return;
+        }
+    }
+    free_processor_id(t->processor_id);
     delete t;
 }
 

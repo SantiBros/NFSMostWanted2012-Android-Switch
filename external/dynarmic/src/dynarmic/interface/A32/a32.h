@@ -54,6 +54,16 @@ public:
     void Reset();
 
     /**
+     * (NFS:MW Switch port addition) Translates the block at a location
+     * descriptor (as IR::LocationDescriptor::Value()) without running it, so
+     * that it is ready when execution gets there. Not while executing.
+     */
+    void PrecompileBlock(std::uint64_t location_descriptor);
+
+    /// (NFS:MW Switch port addition) Free space left in the code cache, in bytes.
+    std::size_t CodeCacheRemaining();
+
+    /**
      * Stops execution in Jit::Run.
      */
     void HaltExecution(HaltReason hr = HaltReason::UserDefined1);

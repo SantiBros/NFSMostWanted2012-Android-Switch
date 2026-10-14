@@ -42,6 +42,7 @@ struct Values {
     // cut off; at 70 it hardly ever does.
     int sound_volume = 70;
     bool gl_thread = true;   // run GL calls on their own thread (takes effect at start-up)
+    bool jit_cache = true;   // remember translated code and translate it ahead (core/jit_cache.h; start-up)
     bool direct_memory = true;  // Switch JIT: direct guest memory access (start-up)
 };
 

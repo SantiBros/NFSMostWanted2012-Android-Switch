@@ -39,6 +39,7 @@ public:
     CodePtr ReverseGetEntryPoint(CodePtr host_pc);
 
     CodePtr GetOrEmit(IR::LocationDescriptor descriptor);
+    std::size_t CodeCacheRemaining() { return GetRemainingSize(); }
 
     void InvalidateBasicBlocks(const tsl::robin_set<IR::LocationDescriptor>& descriptors);
 

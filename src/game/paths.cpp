@@ -319,6 +319,7 @@ std::string progress_dir() { return save_dir() + "/progress"; }
 std::string settings_dir() { return save_dir() + "/settings"; }
 std::string settings_file() { return root() + "/settings.ini"; }
 std::string log_file() { return root() + "/log.txt"; }
+std::string cache_dir() { return root() + "/cache"; }
 
 std::string obb() {
     const std::string in_game = game_dir() + "/" + obb_name();
@@ -378,6 +379,7 @@ void prepare() {
     make_dirs(game_dir());
     make_dirs(progress_dir());
     make_dirs(settings_dir());
+    make_dirs(cache_dir());
 }
 
 }  // namespace game::paths

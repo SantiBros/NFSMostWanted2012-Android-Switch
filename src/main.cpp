@@ -14,6 +14,7 @@
 
 #include "core/cpu.h"
 #include "core/elf.h"
+#include "core/jit_cache.h"
 #include "core/memory.h"
 #include "game/audio.h"
 #include "game/config.h"
@@ -155,6 +156,7 @@ int main(int argc, char** argv) {
                   game::paths::display(obb).c_str());
     }
     elf::relocate_all();
+    jit_cache::fingerprint();  // the game's own code, before the loader patches it
     // Debugging aid: NFSMW_PATCH="libapp.so+0x34013c=e5c43023,..." overwrites
     // guest words before anything runs (used to switch on the game's own
     // debug options, e.g. its AI driver, for automated test runs).
@@ -180,6 +182,12 @@ int main(int argc, char** argv) {
     game::audio::install();  // sound volume
     game::native::apply();  // native versions of the game's hottest OBB-reading code
     game::ui::init();  // controller navigation for the touch menus
+    // JIT cache: after every patch to the game's code, before any of it runs.
+    if (game::prefs::at_startup().jit_cache && !std::getenv("NFSMW_NO_JIT_CACHE")) {
+        jit_cache::init(game::paths::cache_dir());
+        jit_cache::start_worker_warmup();
+        hle::glq::set_idle_work(&jit_cache::main_idle_step);
+    }
     elf::run_initializers();
 
     for (elf::Module* m : elf::all()) {
@@ -240,6 +248,7 @@ int main(int argc, char** argv) {
         game::perf::frame_begin();
         game::fixes::frame();
         game::audio::frame();
+        if (frame == 60) jit_cache::spare_may_go();  // the game's service threads are running by now
         if (!S.size_forced && frame % 30 == 0) {
             int want_w = S.width, want_h = S.height;
             platform::preferred_display_size(want_w, want_h);
@@ -366,6 +375,7 @@ int main(int argc, char** argv) {
     cpu::dump_threads();
     LOGI("network calls refused during this run: %u", hle::blocked_network_attempts());
     LOGI("done");
+    jit_cache::save();
     logging::flush();
     std::fflush(nullptr);
     std::_Exit(0);

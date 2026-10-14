@@ -139,6 +139,7 @@ bool start(int core) {
     platform::gl_release_current();
     platform::ThreadHandle* th = platform::spawn_thread(
         [&state] {
+            platform::set_thread_name("gl");
             platform::boost_current_thread();
             if (!platform::gl_make_current()) {
                 state = -1;
@@ -223,12 +224,19 @@ void finish() {
     sync([] {});
 }
 
+bool (*g_idle_work)() = nullptr;
+void set_idle_work(bool (*step)()) { g_idle_work = step; }
+
 void swap(void (*do_swap)()) {
     if (!g_active) {
         do_swap();
         return;
     }
-    // At most one frame in flight: the previous swap must be done.
+    // At most one frame in flight: the previous swap must be done. Until it
+    // is, the idle work (the JIT cache translating ahead) may use the time.
+    if (g_idle_work)
+        while (g_swaps_done.load(std::memory_order_acquire) < g_swaps_queued && g_idle_work()) {
+        }
     wait_until([] { return g_swaps_done.load(std::memory_order_acquire) >= g_swaps_queued; });
     void* m = begin(
         [](const void* d) {

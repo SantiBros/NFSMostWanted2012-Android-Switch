@@ -57,6 +57,9 @@ THE FOLDER
   |                         that in this one file.
   |     settings/           the game's own settings: language, game version,
   |                         the accepted user agreement
+  +-- cache/                the port's own cache: which parts of the game's code
+  |                         were translated, so later starts load faster (made
+  |                         by the port; safe to delete, it is rebuilt)
   +-- source/               the complete source code of the port (not needed to
   |                         play; safe to delete if you need the space)
   +-- settings.ini          the port's settings (created at the first start)
@@ -188,7 +191,14 @@ TROUBLESHOOTING
   Short stutters although the counter shows 30
       The "perf:" lines in log.txt count them ("hitches") and show how long
       the game waited for the SD card ("game waited"). Please send log.txt
-      with a report. A slow or nearly full SD card makes them worse.
+      with a report. A slow or nearly full SD card makes them worse. The
+      first session after installing the port has more of them: the JIT
+      cache (cache/ folder) is filled then, and used from the next start on.
+
+  Slow loading
+      The first start after installing (or after deleting cache/) is the
+      slowest; later starts translate the game's code ahead of time. log.txt
+      has a line "thread ... finished after ..." for each loading screen.
 
   The sound crackles
       Lower the Sound volume in the debug menu (70% is the default; 100% is
@@ -205,6 +215,16 @@ When you report a problem, attach log.txt from this folder.
 
 WHAT'S NEW
 ----------
+0.2.7
+  * Faster loading. A new loading screen no longer starts translating the
+    game's code from scratch, and the new JIT cache (cache/ folder) remembers
+    which code was translated: from the second start on, the port translates
+    it ahead of time. Loading the game data is faster too.
+  * Fewer stutters: 0.2.6 read the game data byte by byte through the C
+    library, which on the Switch was slow; and with the JIT cache, code a race
+    needs for the first time is usually ready before it runs.
+  * log.txt shows how long each loading screen took and more.
+
 0.2.6
   * Fewer short stutters while the counter shows 30 FPS. The game's data
     file (the OBB) is now read through a memory cache in big blocks instead

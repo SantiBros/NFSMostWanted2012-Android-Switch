@@ -14,6 +14,8 @@
 #include "hle/file_cache.h"
 #include "hle/gl_queue.h"
 #include "hle/hle.h"
+#include "core/jit_cache.h"
+#include "dynarmic/interface/compile_stats.h"
 #include "platform/platform.h"
 
 namespace game::perf {
@@ -66,8 +68,23 @@ void log_summary() {
     else if (busy > 0.85) limited_by = "GL driver (CPU, core 2): a higher CPU clock helps";
     else if (swap_ms > 0.4 * frame_ms) limited_by = "GPU: a higher GPU clock helps";
     else limited_by = "mixed";
+    // New game code translated by the main thread's JIT in this window (each
+    // new piece of code costs time the first time it runs).
+    static Dynarmic::CompileStats last;
+    const Dynarmic::CompileStats& now = Dynarmic::t_compile_stats;  // perf runs on the main thread
+    char jit[96] = "";
+    if (now.blocks != last.blocks)
+        std::snprintf(jit, sizeof jit, "JIT: %llu new blocks, %.0f ms (main thread)",
+                      (unsigned long long)(now.blocks - last.blocks), (double)(now.ns - last.ns) / 1e6);
+    last = now;
+    char memory[64] = "";
+    u64 used = 0, total = 0;
+    if (platform::memory_usage(used, total)) {
+        if (total) std::snprintf(memory, sizeof memory, "memory %llu of %llu MiB", (unsigned long long)(used >> 20), (unsigned long long)(total >> 20));
+        else std::snprintf(memory, sizeof memory, "memory %llu MiB", (unsigned long long)(used >> 20));
+    }
     std::string extra;
-    for (const std::string& part : {hle::filecache::summary(), audio::summary()})
+    for (const std::string& part : {std::string(jit), jit_cache::summary(), hle::filecache::summary(), audio::summary(), std::string(memory)})
         if (!part.empty()) extra += " | " + part;
     LOGI("perf: %.1f fps (frame %.1f ms, slowest %.0f ms, %d hitches) | game %.1f ms/frame | GL thread %.0f%% busy, "
          "waited %.1f ms/frame, swap %.1f ms/frame | %.0f GL calls | %s %dx%d, detail %s, limit %s, vsync %s | %s | %s%s",

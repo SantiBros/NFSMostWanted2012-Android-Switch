@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -219,6 +220,18 @@ void m_glDeleteBuffers(s32 n, u32 ids) {
 void m_glVertexAttribPointer(u32 index, s32 size, u32 type, u32 norm, s32 stride, u32 ptr) {
     LOAD(glVertexAttribPointer);
     GL_TRACE("glVertexAttribPointer");
+    // NFSMW_ATTRIB_LOG=1 (debugging): each kind of vertex attribute the game uses.
+    static const bool attrib_log = std::getenv("NFSMW_ATTRIB_LOG") != nullptr;
+    if (attrib_log) {
+        static std::vector<u64> seen;
+        const u64 key = (u64)size | (u64)type << 8 | (u64)(norm != 0) << 24 | (u64)(stride & 63) << 32 |
+                        (u64)(g_array_buffer ? (ptr & 3) : 9) << 40;
+        if (std::find(seen.begin(), seen.end(), key) == seen.end()) {
+            seen.push_back(key);
+            LOGI("attrib: size %d type 0x%X normalized %u stride %d offset %u (mod 4: %u) %s", size, type, norm, stride,
+                 ptr, ptr & 3, g_array_buffer ? "buffer" : "client memory");
+        }
+    }
     // With a VBO bound the "pointer" is an offset; otherwise it is client memory.
     const void* hp = g_array_buffer ? reinterpret_cast<const void*>((uintptr_t)ptr) : mem::ptr<void>(ptr);
     if (index < 32) {
@@ -258,14 +271,95 @@ void m_glPixelStorei(u32 pname, s32 v) {
     if (pname == GL_UNPACK_ALIGNMENT) g_unpack_alignment = v;
     glq::call(p, pname, v);
 }
+// NFSMW_DUMP_SHADERS=<folder> (debugging): write every shader the game
+// compiles to that folder.
+void dump_shader(u32 shader, s32 count, u32 strings, u32 lengths) {
+    static const char* dir = std::getenv("NFSMW_DUMP_SHADERS");
+    if (!dir) return;
+    static std::atomic<int> n{0};
+    char path[512];
+    std::snprintf(path, sizeof path, "%s/shader_%04d_%u.glsl", dir, n.fetch_add(1), shader);
+    if (FILE* f = std::fopen(path, "wb")) {
+        for (s32 i = 0; i < count; i++) {
+            const char* src = mem::str(mem::r32(strings + i * 4));
+            const s32 len = lengths ? (s32)mem::r32(lengths + i * 4) : -1;
+            std::fwrite(src, 1, len >= 0 ? (size_t)len : std::strlen(src), f);
+        }
+        std::fclose(f);
+    }
+}
+// The game's shader source (all strings joined).
+std::string shader_text(s32 count, u32 strings, u32 lengths) {
+    std::string out;
+    for (s32 i = 0; i < count; i++) {
+        const char* src = mem::str(mem::r32(strings + i * 4));
+        const s32 len = lengths ? (s32)mem::r32(lengths + i * 4) : -1;
+        out.append(src, len >= 0 ? (size_t)len : std::strlen(src));
+    }
+    return out;
+}
+// Changes to the game's shaders (see patch_shader below); empty when none apply.
+std::string patch_shader(const std::string& src);
 void m_glShaderSource(u32 shader, s32 count, u32 strings, u32 lengths) {
     LOAD(glShaderSource);
     GL_TRACE("glShaderSource");
+    dump_shader(shader, count, strings, lengths);
+    std::string patched = patch_shader(shader_text(count, strings, lengths));
     glq::sync([&] {
+        if (!patched.empty()) {
+            const GLchar* one = patched.c_str();
+            p(shader, 1, &one, nullptr);
+            return;
+        }
         std::vector<const GLchar*> s(count);
         for (s32 i = 0; i < count; i++) s[i] = mem::str(mem::r32(strings + i * 4));
         p(shader, count, s.data(), lengths ? mem::ptr<GLint>(lengths) : nullptr);
     });
+}
+std::string patch_shader(const std::string& src) {
+    std::string out;
+    // NFSMW_SHADER_NAN_DEBUG=1 (debugging): building windows' reflection
+    // shader shows magenta where its reflection coordinate is not a number.
+    static const bool nan_debug = std::getenv("NFSMW_SHADER_NAN_DEBUG") != nullptr;
+    if (nan_debug && src.find("g_ReflectionMask") != std::string::npos && src.find("gl_FragColor") != std::string::npos) {
+        const size_t end = src.rfind('}');
+        if (end != std::string::npos) {
+            out = src.substr(0, end) +
+                  "  if (v_3.x != v_3.x || v_3.y != v_3.y) gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0);\n" +
+                  "  else if (v_3.x < 0.0 || v_3.x > 1.0 || v_3.y < 0.0 || v_3.y > 1.0) gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);\n}\n";
+        }
+    }
+    return out;
+}
+// A shader or program the driver rejects is drawn wrongly or not at all, and
+// drivers differ in what they accept (the game was written for phone GPUs).
+// These checks run on the GL thread right after the compile / link, without
+// making the game wait, and put the driver's message in log.txt.
+void check_shader(GLuint shader) {
+    static auto get = (void (*)(GLuint, GLenum, GLint*))gl_proc("glGetShaderiv");
+    static auto info = (void (*)(GLuint, GLsizei, GLsizei*, GLchar*))gl_proc("glGetShaderInfoLog");
+    static std::atomic<int> failures{0};
+    GLint ok = 1;
+    get(shader, GL_COMPILE_STATUS, &ok);
+    if (ok || failures.fetch_add(1) >= 20) return;
+    char log[1024] = "";
+    info(shader, sizeof log, nullptr, log);
+    LOGW("GL: shader %u did not compile: %s", shader, log);
+}
+void check_program(GLuint prog) {
+    static auto get = (void (*)(GLuint, GLenum, GLint*))gl_proc("glGetProgramiv");
+    static auto info = (void (*)(GLuint, GLsizei, GLsizei*, GLchar*))gl_proc("glGetProgramInfoLog");
+    static std::atomic<int> failures{0};
+    GLint ok = 1;
+    get(prog, GL_LINK_STATUS, &ok);
+    if (ok || failures.fetch_add(1) >= 20) return;
+    char log[1024] = "";
+    info(prog, sizeof log, nullptr, log);
+    LOGW("GL: program %u did not link: %s", prog, log);
+}
+void f_glCompileShader(u32 shader) {
+    g_glCompileShader(shader);
+    glq::call(&check_shader, (GLuint)shader);
 }
 void m_glGetVertexAttribPointerv(u32 index, u32 pname, u32 out) {
     LOAD(glGetVertexAttribPointerv);
@@ -463,11 +557,55 @@ void m_glDeleteTextures(s32 n, u32 ids) {
     }
     delete_names<&p_delete_textures>(n, ids);
 }
+// The first texture of each format, for the log (which path the game took).
+void note_texture_format(u32 fmt, u32 type, s32 w, s32 h, bool compressed) {
+    static std::mutex mu;
+    static std::vector<u64> seen;
+    const u64 key = (u64)fmt << 32 | type | (compressed ? 1ull << 31 : 0);
+    std::lock_guard lk(mu);
+    if (std::find(seen.begin(), seen.end(), key) != seen.end()) return;
+    seen.push_back(key);
+    if (compressed) LOGI("GL: first compressed texture in format 0x%X (%dx%d)", fmt, w, h);
+    else LOGI("GL: first texture in format 0x%X, type 0x%X (%dx%d)", fmt, type, w, h);
+}
+// NFSMW_ETC1_SCAN=1 (debugging): count ETC1 blocks whose "differential" colours
+// leave the 0..31 range (invalid ETC1; an ETC2 decoder reads them as other modes).
+void etc1_scan(u32 w, u32 h, u32 size, u32 data) {
+    static const bool on = std::getenv("NFSMW_ETC1_SCAN") != nullptr;
+    if (!on || !data) return;
+    static std::atomic<u64> total{0}, bad_total{0}, textures{0}, bad_textures{0};
+    const u8* p = mem::host(data);
+    u64 bad = 0, n = size / 8;
+    for (u64 i = 0; i < n; i++) {
+        const u8* b = p + i * 8;
+        if (!(b[3] & 2)) continue;  // individual mode
+        for (int c = 0; c < 3; c++) {
+            const int base = b[c] >> 3, d = (b[c] & 7) >= 4 ? (b[c] & 7) - 8 : (b[c] & 7);
+            if (base + d < 0 || base + d > 31) {
+                bad++;
+                break;
+            }
+        }
+    }
+    total += n;
+    bad_total += bad;
+    textures++;
+    if (bad) bad_textures++;
+    if (bad) LOGI("ETC1 scan: %ux%u texture: %llu of %llu blocks out of range (so far %llu of %llu textures, %llu of %llu blocks)", w, h,
+                  (unsigned long long)bad, (unsigned long long)n, (unsigned long long)bad_textures.load(),
+                  (unsigned long long)textures.load(), (unsigned long long)bad_total.load(), (unsigned long long)total.load());
+}
+void f_glCompressedTexImage2D(u32 target, u32 level, u32 ifmt, u32 w, u32 h, u32 border, u32 size, u32 data) {
+    if (level == 0) note_texture_format(ifmt, 0, (s32)w, (s32)h, true);
+    if (ifmt == 0x8D64) etc1_scan(w, h, size, data);
+    g_glCompressedTexImage2D(target, level, ifmt, w, h, border, size, data);
+}
 using TexImageFn = void (*)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*);
 TexImageFn p_tex_image = nullptr;
 void m_glTexImage2D(u32 target, s32 level, s32 ifmt, s32 w, s32 h, s32 border, u32 fmt, u32 type, u32 px) {
     if (!p_tex_image) p_tex_image = (TexImageFn)gl_proc("glTexImage2D");
     GL_TRACE("glTexImage2D");
+    if (level == 0 && px) note_texture_format(fmt, type, w, h, false);
     if (target == GL_TEXTURE_2D && level == 0) {
         u32 id = scene::g_bound_tex[scene::g_unit];
         if (scene::screen_sized(w, h))
@@ -651,6 +789,7 @@ void f_glLinkProgram(u32 prog) {
     g_uniforms.erase(prog);  // linking resets the program's uniforms
     if (g_program == (s64)prog) g_cur_uniforms = &g_uniforms[prog];
     g_glLinkProgram(prog);
+    glq::call(&check_program, (GLuint)prog);
 }
 void f_glDeleteProgram(u32 prog) {
     g_uniforms.erase(prog);
@@ -896,6 +1035,7 @@ void register_gles() {
     REG("glBindTexture", m_glBindTexture);
     REG("glDeleteTextures", m_glDeleteTextures);
     REG("glTexImage2D", m_glTexImage2D);
+    REG("glCompressedTexImage2D", f_glCompressedTexImage2D);
     REG("glTexParameteri", m_glTexParameteri);
     REG("glBindRenderbuffer", m_glBindRenderbuffer);
     REG("glDeleteRenderbuffers", m_glDeleteRenderbuffers);
@@ -909,6 +1049,7 @@ void register_gles() {
     REG("glDrawArrays", m_glDrawArrays);
     REG("glUseProgram", f_glUseProgram);
     REG("glLinkProgram", f_glLinkProgram);
+    REG("glCompileShader", f_glCompileShader);
     REG("glDeleteProgram", f_glDeleteProgram);
     REG("glEnable", f_glEnable);
     REG("glDisable", f_glDisable);

@@ -24,6 +24,7 @@
 #include "dynarmic/common/x64_disassemble.h"
 #include "dynarmic/frontend/A32/translate/a32_translate.h"
 #include "dynarmic/interface/A32/a32.h"
+#include "dynarmic/interface/compile_stats.h"
 #include "dynarmic/ir/basic_block.h"
 #include "dynarmic/ir/location_descriptor.h"
 #include "dynarmic/ir/opt/passes.h"
@@ -110,6 +111,15 @@ struct Jit::Impl {
         PerformRequestedCacheInvalidation(hr);
 
         return hr;
+    }
+
+    void PrecompileBlock(std::uint64_t descriptor) {
+        ASSERT(!jit_interface->is_executing);
+        GetBasicBlock(IR::LocationDescriptor{descriptor});
+    }
+
+    std::size_t CodeCacheRemaining() {
+        return block_of_code.SpaceRemaining();
     }
 
     void ClearCache() {
@@ -213,6 +223,7 @@ private:
         }
         block_of_code.EnsureMemoryCommitted(MINIMUM_REMAINING_CODESIZE);
 
+        CompileTimer compile_timer{descriptor.Value()};
         IR::Block ir_block = A32::Translate(A32::LocationDescriptor{descriptor}, conf.callbacks, {conf.arch_version, conf.define_unpredictable_behaviour, conf.hook_hint_instructions});
         Optimization::PolyfillPass(ir_block, polyfill_options);
         Optimization::NamingPass(ir_block);
@@ -290,6 +301,14 @@ void Jit::InvalidateCacheRange(std::uint32_t start_address, std::size_t length) 
 
 void Jit::Reset() {
     impl->Reset();
+}
+
+void Jit::PrecompileBlock(std::uint64_t location_descriptor) {
+    impl->PrecompileBlock(location_descriptor);
+}
+
+std::size_t Jit::CodeCacheRemaining() {
+    return impl->CodeCacheRemaining();
 }
 
 void Jit::HaltExecution(HaltReason hr) {

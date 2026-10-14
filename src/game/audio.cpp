@@ -46,6 +46,7 @@ int info(jni::jref dev, int what) {
 }
 
 void run() {
+    platform::set_thread_name("sound");
     platform::boost_current_thread();
     cpu::attach_current_thread(512 * 1024);
     jni::jref dev = jni::new_object("org/fmod/FMODAudioDevice");

@@ -10,6 +10,7 @@
 //     main.1003128.com.ea.games.nfs13_row.obb   the game data, unchanged
 //     lib/              the 5 armeabi-v7a libraries from the APK
 //     assets/           the APK's assets/ folder
+//   cache/              the port's own caches, rebuilt when missing (translated-code lists)
 //   save/               what the game writes
 //     progress/         the career save (nfstr_save.sb): money, reputation,
 //                       cars and upgrades, events, Most Wanted progress
@@ -49,6 +50,7 @@ std::string progress_dir();  // <root>/save/progress
 std::string settings_dir();  // <root>/save/settings
 std::string settings_file(); // <root>/settings.ini (the port's settings)
 std::string log_file();
+std::string cache_dir();     // <root>/cache: the port's own caches (safe to delete)
 // The same, as shown to the player ("switch/NFSMostWanted2012/log.txt").
 std::string display(const std::string& host_path);
 

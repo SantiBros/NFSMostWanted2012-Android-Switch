@@ -3,6 +3,7 @@
 #include <pthread.h>
 
 #include <atomic>
+#include <ctime>
 
 #include "core/common.h"
 #if defined(__SWITCH__)
@@ -60,6 +61,26 @@ void reserve_core_for_gl(int core) { g_reserved_core = core; }
 void boost_current_thread() {
 #if defined(__SWITCH__)
     svcSetThreadPriority(CUR_THREAD_HANDLE, 0x2B);
+#endif
+}
+
+unsigned long long thread_cpu_ns() {
+#if defined(__SWITCH__)
+    u64 ticks = 0;
+    if (R_FAILED(svcGetInfo(&ticks, InfoType_ThreadTickCount, CUR_THREAD_HANDLE, (u64)-1))) return 0;
+    return armTicksToNs(ticks);
+#else
+    timespec ts{};
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    return (unsigned long long)ts.tv_sec * 1000000000ull + (unsigned long long)ts.tv_nsec;
+#endif
+}
+
+void set_thread_name(const char* name) {
+#if defined(__linux__)
+    pthread_setname_np(pthread_self(), name);
+#else
+    (void)name;
 #endif
 }
 

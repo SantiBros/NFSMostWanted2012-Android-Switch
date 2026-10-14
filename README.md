@@ -75,6 +75,9 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
   port sets itself up at the first start, with a progress screen.
 - **Forgiving.** Libraries left in `lib/armeabi-v7a/`, an assets folder in the wrong place or a
   renamed OBB are moved where they belong automatically.
+- **Faster with every start.** The port remembers which parts of the game's code it has translated
+  (the JIT cache) and translates them ahead of time from then on: shorter loading screens and
+  fewer stutters.
 - **Fully offline.** Every online service is blocked; career, races, cars and saves work offline.
 - **Your career in one file** (`save/progress/nfstr_save.sb`): easy to back up, kept across updates.
 - **Debug menu** (ZL + ZR + Minus): frame-rate limit, VSync, 3D resolution, detail level, CPU / GPU /
@@ -100,7 +103,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 <img src="docs/images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
 
 1. **Download.** On the [Releases](../../releases) page, under **Assets**, download
-   `NFSMostWanted2012-0.2.6.zip` (not "Source code", which is only for developers) and unzip it on
+   `NFSMostWanted2012-0.2.7.zip` (not "Source code", which is only for developers) and unzip it on
    your computer.
 2. **Copy to the SD card.** Copy the `switch` folder from the zip to the root of your SD card.
 3. **Add your game.** Copy your APK and your OBB into `switch/NFSMostWanted2012/game/`. Don't unzip or
@@ -119,7 +122,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.2.6.nro   the port
+├── NFSMostWanted2012-0.2.7.nro   the port
 ├── README.txt                    the player's guide
 ├── LICENSES.txt                  open-source components and their licenses
 ├── game/                         YOUR game files (never share them)
@@ -130,6 +133,7 @@ sd:/switch/NFSMostWanted2012/
 ├── save/
 │   ├── progress/                 your career: money, reputation, cars, events
 │   └── settings/                 the game's own settings (language, ...)
+├── cache/                        the port's own cache: makes later starts load faster (safe to delete)
 ├── source/                       the port's source code (not needed to play)
 ├── settings.ini                  the port's settings (also changed in the debug menu)
 └── log.txt                       what happened at the last start: attach it to bug reports
@@ -188,7 +192,8 @@ straight; about 30° of tilt is full lock. All buttons keep working.<br>
 | Music and sound effects | ✅ Works |
 | Saves (kept across updates) | ✅ Works |
 | 720p handheld / 1080p docked | ✅ Works (the resolution is chosen when the game starts) |
-| Frame rate | ⚠️ Still being tuned on real hardware: the game targets 30 fps, and busy races can drop below that at stock clocks. The debug menu can raise the CPU clock. 0.2.6 removes the main causes of short stutters (reading the game data and the log from the SD card). |
+| Frame rate | ⚠️ Still being tuned on real hardware: the game targets 30 fps, and busy races can drop below that at stock clocks. The debug menu can raise the CPU clock. 0.2.6 and 0.2.7 remove the main causes of short stutters found so far. |
+| Loading | ✅ Faster since 0.2.7, most of all from the second start on (the JIT cache) |
 | Gyro steering, custom clocks | 🧪 New, not yet confirmed on many consoles: feedback welcome |
 | Online features (Autolog, leaderboards, EA account, store) | ❌ Not available: the port is offline by design |
 
@@ -315,7 +320,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-The result is `build-switch/NFSMostWanted2012-0.2.6.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
+The result is `build-switch/NFSMostWanted2012-0.2.7.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
 the details, the Linux test build used for development, and how a release is made.
 
 ## Credits

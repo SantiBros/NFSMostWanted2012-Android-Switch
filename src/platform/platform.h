@@ -117,4 +117,8 @@ struct AudioStats {
 };
 AudioStats audio_stats();
 
+// Memory the process uses, and (Switch) how much it may use, in bytes. False
+// when not known.
+bool memory_usage(u64& used, u64& total);
+
 }  // namespace platform

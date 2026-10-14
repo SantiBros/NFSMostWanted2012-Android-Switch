@@ -14,6 +14,7 @@ release zip's `LICENSES.txt` has the full license text of everything that goes i
 | [robin-map](https://github.com/Tessil/robin-map) | Hash tables (used by Dynarmic) | MIT | `external/dynarmic/externals/robin-map/LICENSE` |
 | [Boost](https://www.boost.org) (ICL, Variant; headers only) | Used by Dynarmic | BSL-1.0 | `res/licenses/boost.txt` |
 | [stb](https://github.com/nothings/stb) (`stb_truetype`, `stb_image`) | Font rendering; unpacking the APK at the first start | MIT or public domain | `external/stb/LICENSE` |
+| [zlib](https://zlib.net) (`inffast.c` 1.2.8, adapted in `src/game/native.cpp`) | Decompressing the game data natively | zlib | `res/licenses/zlib.txt` |
 | [libnx](https://github.com/switchbrew/libnx) | Nintendo Switch homebrew library | ISC | `res/licenses/libnx.txt` |
 | [Mesa](https://mesa3d.org) (switch-mesa) | OpenGL ES driver | MIT | `res/licenses/mesa.txt` |
 | libdrm_nouveau | GPU interface for Mesa | MIT | `res/licenses/libdrm_nouveau.txt` |

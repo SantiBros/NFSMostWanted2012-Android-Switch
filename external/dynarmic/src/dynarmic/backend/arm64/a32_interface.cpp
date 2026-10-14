@@ -60,6 +60,15 @@ struct Jit::Impl final {
         return hr;
     }
 
+    void PrecompileBlock(std::uint64_t descriptor) {
+        ASSERT(!jit_interface->is_executing);
+        current_address_space.GetOrEmit(IR::LocationDescriptor{descriptor});
+    }
+
+    std::size_t CodeCacheRemaining() {
+        return current_address_space.CodeCacheRemaining();
+    }
+
     void ClearCache() {
         std::unique_lock lock{invalidation_mutex};
         invalidate_entire_cache = true;
@@ -186,6 +195,14 @@ void Jit::InvalidateCacheRange(std::uint32_t start_address, std::size_t length) 
 
 void Jit::Reset() {
     impl->Reset();
+}
+
+void Jit::PrecompileBlock(std::uint64_t location_descriptor) {
+    impl->PrecompileBlock(location_descriptor);
+}
+
+std::size_t Jit::CodeCacheRemaining() {
+    return impl->CodeCacheRemaining();
 }
 
 void Jit::HaltExecution(HaltReason hr) {

@@ -22,6 +22,7 @@ namespace {
 
 constexpr uint64_t kBlock = 128 * 1024;
 constexpr uint64_t kCapacity = 128ull * 1024 * 1024;  // memory for cached blocks
+constexpr size_t kStdioBuffer = 8 * 1024;              // per open FILE
 constexpr uint64_t kReadAheadMax = 8;                 // blocks (1 MiB) read ahead of a stream that keeps reading forward
 
 uint64_t now_ns() {
@@ -161,6 +162,7 @@ std::deque<std::pair<Backing*, uint64_t>> g_ahead;
 bool g_ahead_started = false;
 
 void read_ahead_thread() {
+    platform::set_thread_name("obb-read-ahead");
     for (;;) {
         std::pair<Backing*, uint64_t> job;
         {
@@ -285,7 +287,13 @@ FILE* open(const std::string& host_path) {
         delete s;
         return nullptr;
     }
-    setvbuf(f, nullptr, _IONBF, 0);  // the cache is the buffer
+    // A small stdio buffer in front of the cache. Unbuffered (0.2.6), every
+    // fgetc and every tiny fread went through the C library's refill, which
+    // for an unbuffered stream first flushes every open output stream (the
+    // Switch's newlib walks and locks all of them for each byte).
+    static const bool unbuffered = std::getenv("NFSMW_OBB_UNBUFFERED") != nullptr;  // 0.2.6 behaviour, for comparisons
+    if (unbuffered) setvbuf(f, nullptr, _IONBF, 0);
+    else setvbuf(f, nullptr, _IOFBF, kStdioBuffer);
     return f;
 }
 

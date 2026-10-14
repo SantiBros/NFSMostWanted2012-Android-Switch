@@ -10,11 +10,19 @@
 //  - unzReadCurrentFile's decryption loop (libapp.so+0x647310..0x647390)
 //  - its byte-by-byte copy loop for stored entries (+0x6473F8..0x647414)
 //  - zlib's crc32() (+0x65F6C8)
+// and, for loading screens (0.2.7), where a loading thread spent about a sixth
+// of its time decompressing and a twelfth hashing:
+//  - zlib's inflate_fast() (+0x6674FC)
+//  - the game's FNV-1 hash of loaded data (+0x4EDAD4)
 //
 // Each patch site is checked word for word first; a different game build is
-// left alone. The results are bit-identical to the game's own code.
+// left alone. The results are bit-identical to the game's own code
+// (NFSMW_VERIFY_NATIVE=1 runs both and compares them).
 #include "game/native.h"
 
+#include <algorithm>
+#include <atomic>
+#include <mutex>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -191,6 +199,340 @@ bool install_copy(elf::Module* m) {
     return true;
 }
 
+// ---- zlib inflate_fast ------------------------------------------------------------
+// The game's zlib (1.2.5.1 or later, statically linked in libapp.so) decodes
+// compressed OBB entries; inflate_fast() decodes most of the bytes and was the
+// hottest function while loading (about a sixth of a loading thread's time).
+// This is the same algorithm, adapted from zlib 1.2.8's inffast.c
+// (Copyright (C) 1995-2013 Mark Adler; zlib license, see res/licenses/zlib.txt):
+// altered to work on the game's own z_stream and inflate_state in guest memory.
+//
+// Guest layouts (32-bit): z_stream: next_in 0x00, avail_in 0x04, next_out 0x0C,
+// avail_out 0x10, msg 0x18, state 0x1C. inflate_state: mode 0x00, wsize 0x28,
+// whave 0x2C, wnext 0x30, window 0x34, hold 0x38, bits 0x3C, lencode 0x4C,
+// distcode 0x50, lenbits 0x54, distbits 0x58, sane 0x1BC0.
+namespace zfast {
+constexpr u32 kModeType = 11, kModeBad = 29;  // inflate_mode values of this zlib
+u32 g_msg_too_far = 0, g_msg_dist = 0, g_msg_lit = 0;
+struct Code {
+    u8 op, bits;
+    u16 val;
+};
+static_assert(sizeof(Code) == 4);
+
+void inflate_fast(u32 strm, u32 start) {
+    if (!in_guest(strm, 0x38)) fatal("inflate_fast: bad stream %08X", strm);
+    const u32 st = mem::r32(strm + 0x1C);
+    if (!in_guest(st, 0x1BC4)) fatal("inflate_fast: bad state %08X", st);
+    const u32 next_in = mem::r32(strm), avail_in = mem::r32(strm + 4);
+    const u32 next_out = mem::r32(strm + 0xC), avail_out = mem::r32(strm + 0x10);
+    if (!in_guest(next_in, avail_in) || !in_guest(next_out, avail_out) || start < avail_out ||
+        !in_guest(next_out - (start - avail_out), start))
+        fatal("inflate_fast: bad buffers in %08X+%u out %08X+%u", next_in, avail_in, next_out, avail_out);
+    const u32 wsize = mem::r32(st + 0x28), whave = mem::r32(st + 0x2C), wnext = mem::r32(st + 0x30);
+    const u32 window_addr = mem::r32(st + 0x34);
+    if (wsize && !in_guest(window_addr, wsize)) fatal("inflate_fast: bad window %08X+%u", window_addr, wsize);
+    const u32 sane = mem::r32(st + 0x1BC0);
+    const Code* lcode = reinterpret_cast<const Code*>(mem::host(mem::r32(st + 0x4C)));
+    const Code* dcode = reinterpret_cast<const Code*>(mem::host(mem::r32(st + 0x50)));
+    const u32 lmask = (1u << mem::r32(st + 0x54)) - 1, dmask = (1u << mem::r32(st + 0x58)) - 1;
+
+    const u8* in = mem::host(next_in);
+    const u8* const in0 = in;
+    const u8* const last = in + (avail_in - 5);
+    u8* out = mem::host(next_out);
+    u8* const out0 = out;
+    u8* const beg = out - (start - avail_out);
+    u8* const end = out + (avail_out - 257);
+    const u8* const window = wsize ? mem::host(window_addr) : nullptr;
+    u32 hold = mem::r32(st + 0x38), bits = mem::r32(st + 0x3C);
+    u32 op, len, dist;
+    const u8* from;
+    Code here;
+
+    do {
+        if (bits < 15) {
+            hold += (u32)(*in++) << bits;
+            bits += 8;
+            hold += (u32)(*in++) << bits;
+            bits += 8;
+        }
+        here = lcode[hold & lmask];
+    dolen:
+        op = here.bits;
+        hold >>= op;
+        bits -= op;
+        op = here.op;
+        if (op == 0) {  // literal
+            *out++ = (u8)here.val;
+        } else if (op & 16) {  // length base
+            len = here.val;
+            op &= 15;
+            if (op) {
+                if (bits < op) {
+                    hold += (u32)(*in++) << bits;
+                    bits += 8;
+                }
+                len += hold & ((1u << op) - 1);
+                hold >>= op;
+                bits -= op;
+            }
+            if (bits < 15) {
+                hold += (u32)(*in++) << bits;
+                bits += 8;
+                hold += (u32)(*in++) << bits;
+                bits += 8;
+            }
+            here = dcode[hold & dmask];
+        dodist:
+            op = here.bits;
+            hold >>= op;
+            bits -= op;
+            op = here.op;
+            if (op & 16) {  // distance base
+                dist = here.val;
+                op &= 15;
+                if (bits < op) {
+                    hold += (u32)(*in++) << bits;
+                    bits += 8;
+                    if (bits < op) {
+                        hold += (u32)(*in++) << bits;
+                        bits += 8;
+                    }
+                }
+                dist += hold & ((1u << op) - 1);
+                hold >>= op;
+                bits -= op;
+                op = (u32)(out - beg);  // max distance in output
+                if (dist > op) {        // copy from the window
+                    op = dist - op;     // distance back in window
+                    if (op > whave && sane) {
+                        mem::w32(strm + 0x18, g_msg_too_far);
+                        mem::w32(st, kModeBad);
+                        break;
+                    }
+                    from = window;
+                    if (wnext == 0) {  // very common case
+                        from += wsize - op;
+                        if (op < len) {
+                            len -= op;
+                            do *out++ = *from++;
+                            while (--op);
+                            from = out - dist;
+                        }
+                    } else if (wnext < op) {  // wrap around window
+                        from += wsize + wnext - op;
+                        op -= wnext;
+                        if (op < len) {
+                            len -= op;
+                            do *out++ = *from++;
+                            while (--op);
+                            from = window;
+                            if (wnext < len) {
+                                op = wnext;
+                                len -= op;
+                                do *out++ = *from++;
+                                while (--op);
+                                from = out - dist;
+                            }
+                        }
+                    } else {  // contiguous in window
+                        from += wnext - op;
+                        if (op < len) {
+                            len -= op;
+                            do *out++ = *from++;
+                            while (--op);
+                            from = out - dist;
+                        }
+                    }
+                    while (len > 2) {
+                        *out++ = *from++;
+                        *out++ = *from++;
+                        *out++ = *from++;
+                        len -= 3;
+                    }
+                    if (len) {
+                        *out++ = *from++;
+                        if (len > 1) *out++ = *from++;
+                    }
+                } else {
+                    from = out - dist;  // copy direct from output
+                    do {                // minimum length is three
+                        *out++ = *from++;
+                        *out++ = *from++;
+                        *out++ = *from++;
+                        len -= 3;
+                    } while (len > 2);
+                    if (len) {
+                        *out++ = *from++;
+                        if (len > 1) *out++ = *from++;
+                    }
+                }
+            } else if ((op & 64) == 0) {  // 2nd level distance code
+                here = dcode[here.val + (hold & ((1u << op) - 1))];
+                goto dodist;
+            } else {
+                mem::w32(strm + 0x18, g_msg_dist);
+                mem::w32(st, kModeBad);
+                break;
+            }
+        } else if ((op & 64) == 0) {  // 2nd level length code
+            here = lcode[here.val + (hold & ((1u << op) - 1))];
+            goto dolen;
+        } else if (op & 32) {  // end of block
+            mem::w32(st, kModeType);
+            break;
+        } else {
+            mem::w32(strm + 0x18, g_msg_lit);
+            mem::w32(st, kModeBad);
+            break;
+        }
+    } while (in < last && out < end);
+
+    // Return unused bytes (on entry, bits < 8, so in won't go too far back).
+    len = bits >> 3;
+    in -= len;
+    bits -= len << 3;
+    hold &= (1u << bits) - 1;
+
+    mem::w32(strm, next_in + (u32)(in - in0));
+    mem::w32(strm + 0xC, next_out + (u32)(out - out0));
+    mem::w32(strm + 4, (u32)(in < last ? 5 + (last - in) : 5 - (in - last)));
+    mem::w32(strm + 0x10, (u32)(out < end ? 257 + (end - out) : 257 - (out - end)));
+    mem::w32(st + 0x38, hold);
+    mem::w32(st + 0x3C, bits);
+}
+}  // namespace zfast
+
+// NFSMW_VERIFY_NATIVE=1 (testing): run the native version and the game's own
+// code on the same input and compare everything they write.
+bool g_verify = false;
+std::atomic<u64> g_verified{0}, g_mismatches{0};
+void report_mismatch(const char* what, const char* detail) {
+    if (g_mismatches.fetch_add(1) < 20) LOGE("native code: %s differs from the game's code: %s", what, detail);
+}
+void note_verified(const char* what) {
+    static std::mutex mu;
+    static std::vector<std::pair<const char*, u64>> counts;
+    u64 n = 0;
+    {
+        std::lock_guard lk(mu);
+        auto it = std::find_if(counts.begin(), counts.end(), [what](const auto& c) { return c.first == what; });
+        if (it == counts.end()) counts.push_back({what, 0}), it = counts.end() - 1;
+        n = ++it->second;
+    }
+    g_verified++;
+    if ((n & (n - 1)) == 0 && n >= 256)
+        LOGI("native code: %s: %llu calls verified so far, %llu mismatches in all", what, (unsigned long long)n,
+             (unsigned long long)g_mismatches.load());
+}
+
+// The original function's first two instructions, then a jump to the rest
+// (for verification: both must not depend on the pc).
+u32 original_entry(u32 f) {
+    return emit({mem::r32(f), mem::r32(f + 4), 0xE51FF004, f + 8});
+}
+
+bool install_inflate_fast(elf::Module* m) {
+    const u32 f = m->base + 0x6674FC;
+    // push {r4-r11,lr} ; add r11,sp,#28 ; sub sp,sp,#96 ; ldr r6,[r0,#0x1c] ; mov r12,r0 ; mov r5,#1 ;
+    // mvn r4,#0 ; mvn r8,#0 ; ldr r0,[r6,#0x58] ; ldr r2,[r6,#0x54]
+    if (!matches(f, {0xE92D4FF0, 0xE28DB01C, 0xE24DD060, 0xE590601C, 0xE1A0C000, 0xE3A05001, 0xE3E04000,
+                     0xE3E08000, 0xE5960058, 0xE5962054}) ||
+        !matches(f + 0x5FC, {0xE3A0000B}) || !matches(f + 0x630, {0xE3A0001D}) ||  // mode = TYPE (11), BAD (29)
+        !matches(f + 0x94, {0xE2860D6F}))                                          // &state->sane (0x1BC0)
+        return false;
+    zfast::g_msg_too_far = mem::static_strdup("invalid distance too far back");
+    zfast::g_msg_dist = mem::static_strdup("invalid distance code");
+    zfast::g_msg_lit = mem::static_strdup("invalid literal/length code");
+    if (!g_verify) {
+        const u32 thunk = thunks::add("native_inflate_fast", [](cpu::GuestThread& t) {
+            zfast::inflate_fast(t.regs()[0], t.regs()[1]);
+        });
+        jump(f, thunk);
+        return true;
+    }
+    static u32 orig = original_entry(f);
+    const u32 thunk = thunks::add(
+        "native_inflate_fast_verify",
+        [](cpu::GuestThread& t) {
+            const u32 strm = t.regs()[0], start = t.regs()[1];
+            const u32 st = mem::r32(strm + 0x1C);
+            const u32 out = mem::r32(strm + 0xC);
+            // Only bytes before next_out are read (earlier output), and both
+            // versions write forward from next_out: no need to restore those.
+            std::vector<u8> s0(mem::host(strm), mem::host(strm) + 0x38), st0(mem::host(st), mem::host(st) + 0x70);
+            zfast::inflate_fast(strm, start);
+            const u32 out1 = mem::r32(strm + 0xC);
+            std::vector<u8> s1(mem::host(strm), mem::host(strm) + 0x38), st1(mem::host(st), mem::host(st) + 0x70),
+                o1(mem::host(out), mem::host(out1));
+            const u32 msg1 = mem::r32(strm + 0x18);
+            std::memcpy(mem::host(strm), s0.data(), s0.size());
+            std::memcpy(mem::host(st), st0.data(), st0.size());
+            t.call(orig, {strm, start});
+            const u32 out2 = mem::r32(strm + 0xC);
+            std::vector<u8> s2(mem::host(strm), mem::host(strm) + 0x38), st2(mem::host(st), mem::host(st) + 0x70),
+                o2(mem::host(out), mem::host(out2));
+            const u32 msg2 = mem::r32(strm + 0x18);
+            const bool msg_ok = msg1 == msg2 ||
+                                (msg1 && msg2 && std::strcmp((const char*)mem::host(msg1), (const char*)mem::host(msg2)) == 0);
+            std::memcpy(&s1[0x18], &s2[0x18], 4);  // compared above
+            if (s1 != s2 || st1 != st2 || o1 != o2 || !msg_ok) {
+                char d[160];
+                std::snprintf(d, sizeof d, "stream %s, state %s, output %s, message %s", s1 != s2 ? "DIFF" : "ok",
+                              st1 != st2 ? "DIFF" : "ok", o1 != o2 ? "DIFF" : "ok", msg_ok ? "ok" : "DIFF");
+                report_mismatch("inflate_fast", d);
+            }
+            note_verified("inflate_fast");
+        },
+        true);
+    jump(f, thunk);
+    return true;
+}
+
+// ---- FNV-1 hash -----------------------------------------------------------------
+// void hash(u32* h, const u8* p, int n): *h = (*h * 16777619) ^ byte, for each
+// byte; the game hashes much of what it loads with it.
+bool install_fnv1(elf::Module* m) {
+    const u32 f = m->base + 0x4EDAD4;
+    if (!matches(f, {0xE92D4800, 0xE1A0B00D, 0xE3520001, 0xB8BD8800, 0xE5903000, 0xE300C193, 0xE340C100, 0xE00E0C93,
+                     0xE4D13001, 0xE2522001, 0xE02E3003, 0xE5803000, 0x1AFFFFF9, 0xE8BD8800}))
+        return false;
+    auto native = [](u32 hp, u32 buf, s32 n) -> u32 {
+        u32 h = mem::r32(hp);
+        if (n < 1) return h;
+        if (!in_guest(buf, (u32)n)) fatal("fnv1: bad buffer %08X+%d", buf, n);
+        const u8* p = mem::host(buf);
+        for (s32 i = 0; i < n; i++) h = (h * 0x01000193u) ^ p[i];
+        return h;
+    };
+    if (!g_verify) {
+        const u32 thunk = thunks::add("native_fnv1", [native](cpu::GuestThread& t) {
+            const u32 hp = t.regs()[0];
+            const s32 n = (s32)t.regs()[2];
+            if (n < 1) return;
+            if (!in_guest(hp, 4)) fatal("fnv1: bad state %08X", hp);
+            mem::w32(hp, native(hp, t.regs()[1], n));
+        });
+        jump(f, thunk);
+        return true;
+    }
+    static u32 orig = original_entry(f);
+    const u32 thunk = thunks::add(
+        "native_fnv1_verify",
+        [native](cpu::GuestThread& t) {
+            const u32 hp = t.regs()[0], buf = t.regs()[1];
+            const s32 n = (s32)t.regs()[2];
+            const u32 want = native(hp, buf, n);
+            t.call(orig, {hp, buf, (u32)n});
+            if (mem::r32(hp) != want) report_mismatch("fnv1", "hash");
+            note_verified("fnv1");
+        },
+        true);
+    jump(f, thunk);
+    return true;
+}
+
 }  // namespace
 
 void apply() {
@@ -201,9 +543,13 @@ void apply() {
     elf::Module* m = elf::find("libapp.so");
     if (!m) return;
     init_crc_tables();
+    g_verify = std::getenv("NFSMW_VERIFY_NATIVE") != nullptr;
     const bool crc = install_crc32(m), dec = install_decrypt(m), copy = install_copy(m);
-    LOGI("native code for OBB reading: crc32 %s, decryption %s, stored-data copy %s", crc ? "on" : "skipped",
-         dec ? "on" : "skipped", copy ? "on" : "skipped");
+    const bool only_026 = std::getenv("NFSMW_NATIVE_026") != nullptr;  // comparisons with 0.2.6
+    const bool inf = !only_026 && install_inflate_fast(m), fnv = !only_026 && install_fnv1(m);
+    LOGI("native code: crc32 %s, zip decryption %s, stored-data copy %s, inflate_fast %s, FNV-1 hash %s%s",
+         crc ? "on" : "skipped", dec ? "on" : "skipped", copy ? "on" : "skipped", inf ? "on" : "skipped",
+         fnv ? "on" : "skipped", g_verify ? " (verifying against the game's code)" : "");
 }
 
 }  // namespace game::native
