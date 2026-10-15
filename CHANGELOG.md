@@ -5,6 +5,13 @@ All notable changes to the port. The release zip's `README.txt` carries the same
 ## [0.2.8]
 
 ### Fixed
+- **The port crashed at start-up on some consoles**, right after loading the game's libraries
+  (every version up to 0.2.7). The game expects its memory to start out as zeros, as on a phone.
+  On the Switch, the memory the port takes still held what the program that ran before it left
+  there (the Homebrew Menu, a forwarder), and the port did not clear it. Where those leftovers
+  reached the game libraries' data, the game's C++ library started up with garbage and crashed.
+  How much is left over depends on what ran before, so it happened on some consoles and not on
+  others. The port now clears its memory before the game starts (a fraction of a second).
 - **A cut-off or damaged game library made the port close right after it started, without a
   message.** The loader trusted the library's headers and read past the end of the file. It now
   checks each library as it loads it. One that is cut off or malformed is deleted, and the port

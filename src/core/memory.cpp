@@ -1,6 +1,7 @@
 #include "core/memory.h"
 
 #include <algorithm>
+#include <chrono>
 #include <map>
 #include <mutex>
 
@@ -110,6 +111,19 @@ void init() {
     g_size = gs.size;
     g_fastmem = gs.fastmem;
     if (!g_base || g_size < HEAP_BASE + (64u << 20)) fatal("could not reserve the guest address space");
+    // The game expects the memory of a new process: zero. On the Switch the
+    // guest space comes from the heap, which still holds whatever the program
+    // that ran before in the same Homebrew loader session left there (the
+    // Homebrew Menu itself, a forwarder...). Before 0.2.8 that reached the
+    // libraries' zero-initialised data (.bss): with leftovers there, libc++'s
+    // start-up code (std::locale) followed a garbage pointer and the port
+    // crashed before the game started, on some consoles only.
+    if (gs.dirty > NULL_GUARD_END) {
+        const auto t0 = std::chrono::steady_clock::now();
+        std::memset(g_base + NULL_GUARD_END, 0, std::min<u64>(gs.dirty, g_size) - NULL_GUARD_END);
+        LOGI("guest memory cleared: %llu MiB in %.0f ms", (unsigned long long)(std::min<u64>(gs.dirty, g_size) >> 20),
+             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+    }
     std::memcpy(g_base + RUNTIME_BASE, runtime_blob, sizeof(runtime_blob));
     u64 heap_end = std::min<u64>(g_size, 0xFF000000ull);
     free_insert(HEAP_BASE, (u32)(heap_end - HEAP_BASE));

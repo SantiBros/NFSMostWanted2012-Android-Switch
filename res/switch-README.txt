@@ -185,7 +185,8 @@ TROUBLESHOOTING
       copy out of it. If this keeps happening, check your SD card on a PC.
 
   The game closes right after it starts
-      Look at the end of log.txt: a CRASH section, or a line marked E/, says
+      0.2.8 fixes a crash at start-up that happened on some consoles. If it
+      still closes, look at the end of log.txt: a CRASH section, or a line marked E/, says
       what happened. Make sure you started with R + a game. Then please send
       log.txt (and the newest file in sd:/atmosphere/crash_reports/, if
       there is one) with a report.
@@ -228,6 +229,10 @@ When you report a problem, attach log.txt from this folder.
 WHAT'S NEW
 ----------
 0.2.8
+  * Fixed: the port crashed at start-up on some consoles. The game expects
+    its memory to start out as zeros; on the Switch it still held what the
+    program that ran before (the Homebrew Menu, a forwarder) left there.
+    The port now clears it before the game starts.
   * A cut-off or damaged game library no longer makes the port close right
     after it starts without a word: the port checks each library, deletes a
     damaged one and says to put the APK back, so it can take a fresh copy.

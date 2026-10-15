@@ -195,6 +195,7 @@ GuestSpace reserve_guest_space() {
         }
     }
     if (gs.base) std::memset(gs.base, 0, 0x10000);
+    gs.dirty = gs.size;  // heap memory: may hold an earlier program's data (cleared in mem::init)
     gs.fastmem = false;  // no user-mode fault handling on Horizon: use a page table
     // Guest NULL page(s): with direct memory access the JIT reads and writes
     // guest memory without checks, so make a NULL-pointer access crash at once

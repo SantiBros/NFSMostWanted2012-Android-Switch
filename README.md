@@ -290,7 +290,8 @@ a moment, please report it with `log.txt`: it counts those "dropouts".
 <details>
 <summary><b>The game closes right after it starts. What can I do?</b></summary>
 
-Look at the end of `log.txt` in the port's folder. Since 0.2.8 it says what happened: a `CRASH`
+First update to 0.2.8 or later: it fixes a crash at start-up that happened on some consoles. If
+it still closes, look at the end of `log.txt` in the port's folder. Since 0.2.8 it says what happened: a `CRASH`
 section when the port crashed, or a line marked `E/` when something is wrong with your files. If
 the port says *"A game file is damaged"*, it has already deleted that file: put your APK back into
 `game/` and start again, and it takes a fresh copy out of it. Also make sure you start the

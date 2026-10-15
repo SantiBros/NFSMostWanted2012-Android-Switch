@@ -16,6 +16,9 @@ struct GuestSpace {
     void* base = nullptr;
     u64 size = 0;
     bool fastmem = false;
+    // Bytes from the start that may hold leftovers and must be zeroed before
+    // the game runs (a fresh process's memory is zero; the game relies on it).
+    u64 dirty = 0;
 };
 GuestSpace reserve_guest_space();
 

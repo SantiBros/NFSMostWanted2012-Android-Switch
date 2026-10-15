@@ -7,6 +7,8 @@
 #include <GLES2/gl2.h>
 #endif
 
+#include <algorithm>
+#include <cstdlib>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -36,6 +38,18 @@ GuestSpace reserve_guest_space() {
     gs.fastmem = true;
 #endif
     if (gs.base == MAP_FAILED) gs.base = nullptr;
+    // Debugging aid: NFSMW_TEST_DIRTY_MEMORY=<MiB> fills that much of the guest
+    // space with leftovers, like the Switch's heap after another program ran
+    // in the same Homebrew loader session.
+    if (const char* d = std::getenv("NFSMW_TEST_DIRTY_MEMORY"); d && gs.base) {
+        const u64 n = std::min<u64>(gs.size, (u64)std::strtoull(d, nullptr, 10) << 20);
+        u32 x = 0x2D2D32FFu;
+        for (u64 i = 0x10000; i + 4 <= n; i += 4) {
+            x = x * 1664525u + 1013904223u;
+            std::memcpy(static_cast<u8*>(gs.base) + i, &x, 4);
+        }
+        gs.dirty = n;
+    }
     return gs;
 }
 

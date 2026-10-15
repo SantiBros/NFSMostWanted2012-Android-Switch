@@ -166,6 +166,9 @@ Module* load(const std::string& path, const std::string& name, std::string* erro
     for (auto& p : ph) {
         if (p.type == PT_LOAD) {
             std::memcpy(mem::host(m->base + p.vaddr), file.data() + p.offset, p.filesz);
+            // The rest of the segment (.bss) is zero, as the Android linker
+            // leaves it.
+            std::memset(mem::host(m->base + p.vaddr + p.filesz), 0, p.memsz - p.filesz);
             if (p.flags & 1) {  // PF_X
                 m->exec_lo = m->base + p.vaddr;
                 m->exec_hi = m->base + p.vaddr + p.memsz;

@@ -196,6 +196,19 @@ tell how much headroom is left.
 
 ## Crash reports and library checks (0.2.8)
 
+**The crash itself.** The tester's Atmosphère crash report (0.2.7) showed a data abort on the
+main thread inside translated code, during `elf::run_initializers`, at the host address of
+guest address `0xFF322D2D`; the guest return addresses in Dynarmic's return stack buffer were
+libc++'s `ios_base::Init::Init` → `basic_streambuf()` → `locale::locale()`, with a pointer into
+libc++'s `.bss`. The ELF loader copied each segment's file part and left the rest (`.bss`) as
+the guest memory already was, and on the Switch the guest space is heap memory that the
+Homebrew loader hands over from the program that ran before in the same session (the
+Homebrew Menu, a forwarder): with leftovers there, libc++'s static locale looked initialised
+and pointed at garbage. `NFSMW_TEST_DIRTY_MEMORY=<MiB>` (desktop) fills the guest space with
+leftovers and reproduces the crash at the same place. Since 0.2.8, `mem::init` clears the
+guest space when the platform says it may hold leftovers (the Switch: all of it, about 1.25
+GiB, logged as `guest memory cleared`) and `elf::load` zero-fills each segment's `.bss`.
+
 A tester's `log.txt` from 0.2.7 ended right after `loaded libNimble.so`, with no error: the port
 had closed while loading or just after loading the game's main library, `libapp.so`. Two things
 made that log useless, and both changed:

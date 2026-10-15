@@ -300,7 +300,8 @@ esos cortes ("dropouts").
 <details>
 <summary><b>El juego se cierra justo después de abrirlo. ¿Qué puedo hacer?</b></summary>
 
-Mira el final de `log.txt` en la carpeta del port. Desde la 0.2.8 dice qué pasó: una sección
+Primero actualiza a la 0.2.8 o posterior: corrige un cierre al abrirlo que pasaba en algunas
+consolas. Si sigue cerrándose, mira el final de `log.txt` en la carpeta del port. Desde la 0.2.8 dice qué pasó: una sección
 `CRASH` cuando el port se cerró por un error, o una línea marcada `E/` cuando algo anda mal con
 tus archivos. Si el port dice *"A game file is damaged"* (un archivo del juego está dañado), ya
 borró ese archivo: vuelve a poner tu APK en `game/` y ábrelo otra vez, y saca una copia nueva de
