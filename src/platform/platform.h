@@ -24,6 +24,9 @@ GuestSpace reserve_guest_space();
 void startup_checks();
 // Tell the user about a fatal error in a way they will see (log is written first).
 void show_fatal(const char* message);
+// Catch the port's own crashes (CPU exceptions / fatal signals) and pass them
+// to crash::report (core/crash.h).
+void install_crash_handler();
 
 // The first-start setup screen (game/setup.cpp): plain text, redrawn whole on
 // each call (Switch: the text console; desktop: printed when it closes).

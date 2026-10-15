@@ -81,6 +81,12 @@ NFSMostWanted2012-<version>.zip
 └── prepare_sd.py               run on a computer to fill game/
 ```
 
+Next to the zip it writes `NFSMostWanted2012-<version>-symbols.elf`, the symbols of that exact
+build (from `build-switch/nfsmw.elf`, without debug sections). Attach it to the release as well:
+a crash report in `log.txt` gives addresses as offsets in the port's code (`nfsmw.elf+0x...`), and
+`aarch64-none-elf-addr2line -f -C -e NFSMostWanted2012-<version>-symbols.elf 0x...` names the
+function.
+
 Only two text files go on the SD card. `README.txt` comes from `res/switch-README.txt` (with
 the version, date and checksum filled in; its "What's new" section is the changelog), and
 `LICENSES.txt` is generated from the component list in `tools/make_release.py` and the license

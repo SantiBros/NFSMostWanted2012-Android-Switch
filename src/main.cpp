@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "core/cpu.h"
+#include "core/crash.h"
 #include "core/elf.h"
 #include "core/jit_cache.h"
 #include "core/memory.h"
@@ -89,6 +90,7 @@ void parse_args(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     game::paths::init(argc, argv);  // the port's folder: where the .nro was started from
+    crash::install();                // a crash of the port is reported in log.txt
     platform::startup_checks();
     platform::sample_set_main_thread();
     parse_args(argc, argv);
@@ -119,11 +121,46 @@ int main(int argc, char** argv) {
     // Same order as GameActivityMain.onCreate's System.loadLibrary calls.
     const std::string lib = game::paths::lib_dir() + "/";
     for (const char* name : {"libfmodex.so", "libfmodevent.so", "libc++_shared.so", "libNimble.so", "libapp.so"}) {
-        if (!elf::load(lib + name, name))
+        const std::string path = lib + name;
+        std::string why;
+        elf::Module* m = elf::load(path, name, &why);
+        if (!m && why.empty())
             fatal("Game files missing.\n\n%s was not found.\n\nPut your APK of the game (version 1.3.128, an "
                   ".apk or .xapk file) into the game folder:\n%s\nand start again: the port takes the files it "
                   "needs out of it by itself.",
-                  game::paths::display(lib + name).c_str(), game::paths::display(game::paths::game_dir()).c_str());
+                  game::paths::display(path).c_str(), game::paths::display(game::paths::game_dir()).c_str());
+        if (!m) {
+            // Cut off or malformed: it would crash the loader. The setup takes
+            // the libraries out of the player's APK, so deleting the bad copy
+            // lets the next start take a fresh one.
+            const bool removed = std::remove(path.c_str()) == 0;
+            LOGE("%s %s", removed ? "deleted" : "could not delete", path.c_str());
+            fatal("A game file is damaged.\n\n%s cannot be used: %s.\n\n%sput your APK of the game (version "
+                  "1.3.128, an .apk or .xapk file) into the game folder:\n%s\nand start again: the port takes a "
+                  "fresh copy out of it.\n\nIf this happens again, your SD card may have errors: check it on a "
+                  "computer.",
+                  game::paths::display(path).c_str(), why.c_str(),
+                  removed ? "The port has deleted it. Now " : "Delete it, then ",
+                  game::paths::display(game::paths::game_dir()).c_str());
+        }
+        using game::setup::LibraryCheck;
+        u32 recorded = 0;
+        switch (game::setup::check_library(name, m->file_size, m->file_crc, &recorded)) {
+        case LibraryCheck::Tested: break;
+        case LibraryCheck::AsExtracted:
+            LOGW("%s is not the build of 1.3.128 the port was tested with (it is the one from your APK): the game "
+                 "may not work",
+                 name);
+            break;
+        case LibraryCheck::Changed:
+            LOGE("%s has changed since the setup took it out of your APK (crc32 %08X now, %08X then): it may be "
+                 "damaged. If the game crashes, delete the folder game/lib and start again with your APK in game/",
+                 name, m->file_crc, recorded);
+            break;
+        case LibraryCheck::Unknown:
+            LOGW("%s is not the build of 1.3.128 the port was tested with: the game may not work", name);
+            break;
+        }
     }
     {
         const std::string assets = game::paths::assets_dir();
@@ -155,6 +192,7 @@ int main(int argc, char** argv) {
             fatal("%s is not a valid OBB: it must be the original file (a zip archive), not extracted or converted",
                   game::paths::display(obb).c_str());
     }
+    crash::test_point("libs");
     elf::relocate_all();
     jit_cache::fingerprint();  // the game's own code, before the loader patches it
     // Debugging aid: NFSMW_PATCH="libapp.so+0x34013c=e5c43023,..." overwrites
@@ -189,6 +227,7 @@ int main(int argc, char** argv) {
         hle::glq::set_idle_work(&jit_cache::main_idle_step);
     }
     elf::run_initializers();
+    crash::test_point("init");
 
     for (elf::Module* m : elf::all()) {
         if (u32 onload = m->find_export("JNI_OnLoad")) {
@@ -249,6 +288,7 @@ int main(int argc, char** argv) {
         game::fixes::frame();
         game::audio::frame();
         if (frame == 60) jit_cache::spare_may_go();  // the game's service threads are running by now
+        if (frame == 90) crash::test_point("frame");
         if (!S.size_forced && frame % 30 == 0) {
             int want_w = S.width, want_h = S.height;
             platform::preferred_display_size(want_w, want_h);
@@ -376,7 +416,7 @@ int main(int argc, char** argv) {
     LOGI("network calls refused during this run: %u", hle::blocked_network_attempts());
     LOGI("done");
     jit_cache::save();
-    logging::flush();
+    logging::close();
     std::fflush(nullptr);
     std::_Exit(0);
 }

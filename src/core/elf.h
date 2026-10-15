@@ -20,6 +20,7 @@ struct Module {
     u32 init = 0, init_array = 0, init_arraysz = 0;
     u32 fini_array = 0, fini_arraysz = 0;
     u32 exidx = 0, exidx_count = 0;
+    u32 file_size = 0, file_crc = 0;  // the .so file as read (CRC-32 as in a zip listing)
     std::vector<std::string> needed;
     std::unordered_map<std::string, u32> exports;  // defined dynamic symbols
     std::map<u32, std::string> by_addr;            // for crash reports
@@ -32,8 +33,10 @@ struct Module {
     }
 };
 
-// Map a library into guest memory (no relocation yet).
-Module* load(const std::string& path, const std::string& name);
+// Map a library into guest memory (no relocation yet). On failure returns
+// nullptr and, if `error` is given, why: "" when the file is not there, else
+// what is wrong with it (cut off, damaged, not a 32-bit ARM library).
+Module* load(const std::string& path, const std::string& name, std::string* error = nullptr);
 // Resolve relocations of every loaded module. Unresolved functions get a
 // stub that logs and returns 0, so a missing import never crashes silently.
 void relocate_all();
@@ -49,5 +52,7 @@ u32 lookup_global(const std::string& name);
 
 // "libapp.so+0x1234 <symbol+0x10>" for logs.
 std::string describe(u32 addr);
+// The same into a buffer, without allocating memory (crash reports).
+void describe_into(u32 addr, char* buf, size_t size);
 
 }  // namespace elf

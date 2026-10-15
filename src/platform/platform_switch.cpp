@@ -9,6 +9,7 @@
 #include <switch.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -16,8 +17,74 @@
 #include <string>
 #include <vector>
 
+#include "core/crash.h"
 #include "core/jit_cache.h"
 #include "platform/platform.h"
+
+// ---- crash reports (core/crash.h) ---------------------------------------------
+// libnx calls __libnx_exception_handler on the crashed thread, on the stack
+// below, for a CPU exception of the port (a bad memory access, an undefined
+// instruction...). The report goes into log.txt; when the handler returns,
+// libnx ends the program and the system shows its error message (Atmosphere
+// also writes its crash report to sd:/atmosphere/crash_reports/).
+extern "C" {
+alignas(16) u8 __nx_exception_stack[0x8000];
+u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
+void __libnx_exception_handler(ThreadExceptionDump* ctx);
+extern char _start[];   // the start of the .nro's code: offsets in nfsmw.elf count from here
+extern char __end__[];  // the end of its memory
+}
+
+namespace {
+std::atomic<bool> g_crashed{false};
+
+const char* exception_text(u32 desc) {
+    switch (desc) {
+    case 0x101: return "bad memory access (data abort)";
+    case ThreadExceptionDesc_InstructionAbort: return "jump to a bad address (instruction abort)";
+    case ThreadExceptionDesc_MisalignedPC: return "jump to a misaligned address";
+    case ThreadExceptionDesc_MisalignedSP: return "misaligned stack";
+    case ThreadExceptionDesc_Trap: return "undefined instruction";
+    case ThreadExceptionDesc_SError: return "memory system error (SError)";
+    case ThreadExceptionDesc_BadSVC: return "bad system call";
+    default: return "CPU exception";
+    }
+}
+
+// Readable memory from addr up to the returned end (0 if none).
+u64 readable_until(u64 addr) {
+    MemoryInfo mi{};
+    u32 pi = 0;
+    if (R_FAILED(svcQueryMemory(&mi, &pi, addr)) || !(mi.perm & Perm_R) || mi.type == MemType_Unmapped) return 0;
+    return mi.addr + mi.size;
+}
+}  // namespace
+
+void __libnx_exception_handler(ThreadExceptionDump* ctx) {
+    if (g_crashed.exchange(true)) return;  // a second crash meanwhile: let the system handle it
+    crash::HostState s;
+    s.what = exception_text(ctx->error_desc);
+    s.pc = ctx->pc.x;
+    s.lr = ctx->lr.x;
+    s.sp = ctx->sp.x;
+    s.has_address = ctx->error_desc == 0x101 || ctx->error_desc == ThreadExceptionDesc_InstructionAbort;
+    s.fault_address = ctx->far.x;
+    s.esr = ctx->esr;
+    s.image_base = (u64)(uintptr_t)_start;
+    s.image_end = (u64)(uintptr_t)__end__;
+    s.image_name = "nfsmw.elf";
+    static u64 gprs[29];
+    for (int i = 0; i < 29; i++) gprs[i] = ctx->cpu_gprs[i].x;
+    s.gprs = gprs;
+    s.ngprs = 29;
+    // Return-address guesses: stack words that point into the port's code.
+    u64 a = s.sp & ~7ull, end = readable_until(a);
+    for (; a + 8 <= end && a < s.sp + 0x2000 && s.nstack < 16; a += 8) {
+        const u64 v = *reinterpret_cast<const u64*>(a);
+        if (v > s.image_base && v < s.image_end) s.stack[s.nstack++] = v;
+    }
+    crash::report(s);
+}
 
 namespace platform {
 
@@ -82,6 +149,8 @@ bool finish_setup_screen(const std::string& self_nro, bool may_restart) {
     text_screen_close();
     return true;
 }
+
+void install_crash_handler() {}  // __libnx_exception_handler above is all it takes
 
 void show_fatal(const char* message) {
     ErrorApplicationConfig c;

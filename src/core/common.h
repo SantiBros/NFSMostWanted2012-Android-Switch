@@ -26,6 +26,12 @@ void vwrite(Level lvl, const char* tag, const char* fmt, va_list ap);
 // Write the lines logged so far to the log file now (they are otherwise
 // written by a background thread, at least once a second).
 void flush();
+// Flush and close the log file (the program is about to end). Later lines are
+// not written.
+void close();
+// Crash handlers only: write the lines not written yet and then `text` to the
+// log file at once, without allocating memory or waiting for a lock.
+void emergency_write(const char* text, size_t n);
 }  // namespace logging
 
 #define LOGV(...) ::logging::write(::logging::Verbose, "loader", __VA_ARGS__)

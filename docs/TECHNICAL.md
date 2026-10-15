@@ -129,7 +129,9 @@ driver for roughly 4,000–5,000 GL calls. What the loader does about it:
   written and flushed to the SD card by the thread that logged it, usually the game's main
   thread (the game prints bursts of warnings when its HUD animates). Lines now collect in memory
   and a background thread writes them at least once a second; errors, `fatal()` and the exit
-  paths flush at once.
+  paths flush at once. Since 0.2.8 the file is written without the C library's `FILE` (on the
+  Switch straight through the SD card's file system), so that a crash report can still add to
+  it (see [Crash reports](#crash-reports-and-library-checks-028)).
 
 What remains is the game's own code, translated: about 3 million ARM instructions per frame
 in a race (Low detail saves only about 5 % of that; it mostly saves GL calls).
@@ -191,6 +193,45 @@ The defaults therefore leave all clocks at stock. If the frame-rate counter show
 below 30 fps on a console, the debug menu can raise the CPU clock (1224 MHz is a clock some
 Switch games use themselves). These numbers come from the desktop build; real hardware will
 tell how much headroom is left.
+
+## Crash reports and library checks (0.2.8)
+
+A tester's `log.txt` from 0.2.7 ended right after `loaded libNimble.so`, with no error: the port
+had closed while loading or just after loading the game's main library, `libapp.so`. Two things
+made that log useless, and both changed:
+
+- **The log lost its last second.** Lines are written in the background (see above), so a crash
+  took the lines of the last second with it, and nothing recorded the crash itself. Now a
+  crash adds a report to the log (`src/core/crash.cpp`): the lines not written yet, then a
+  `CRASH` section with what went wrong, where (the crash address as an offset in the port's
+  code, which `addr2line -f -e` resolves with that release's symbols,
+  `NFSMostWanted2012-<version>-symbols.elf` on the release page), the caller, the faulting address, which game thread crashed and what it was
+  doing (inside one of the port's own versions of an Android function, or in translated game
+  code, with the guest registers), the general registers and the stack words that point into
+  the port's code. On the Switch, libnx calls `__libnx_exception_handler`
+  (`src/platform/platform_switch.cpp`) on the crashed thread, on a 32 KiB stack of its own;
+  on Linux a signal handler does the same and leaves faults inside the JIT to Dynarmic's own
+  handler (fastmem). The report allocates no memory and takes no lock that could be held: it
+  writes through the same file handle as the log. When the handler returns, libnx ends the
+  program and the system shows its error (Atmosphère writes its own report too). A C++
+  exception nobody caught (`std::bad_alloc` when memory runs out) is reported the same way and
+  ends with a message. `NFSMW_TEST_CRASH=<libs|init|frame>:<host|guest|thread|throw>` crashes
+  on purpose, to check all this.
+- **A damaged library crashed the loader.** `elf::load` read the program headers and segments
+  where the file's headers said, without checking that the file was that long: a cut-off copy
+  made it read past the end of its buffer (on the desktop test build, a `libapp.so` cut to
+  1 or 4 MB crashed it right after `loaded libNimble.so`, without a message). Each library is
+  now checked: headers, segments, the dynamic section and the tables it points to must lie
+  inside the file, and relocations inside the library. One that is not is deleted, with a
+  message saying to put the APK back so that the setup takes a fresh copy. The libraries are
+  also read in one go (0.2.7 read them through a stream into a vector, a few hundred bytes per
+  request to the SD card).
+
+`log.txt` also gets each library's size and CRC-32. The setup writes the size and CRC-32 of
+every library it takes out of the APK to `game/lib/checksums.txt`; at each start, a library
+that is neither the 1.3.128 build the port was tested with nor what the setup wrote is
+reported as changed (an SD card error, most likely), and one from another APK build is noted.
+Neither stops the game: modified APKs have libraries of their own.
 
 ## Online services are blocked
 
@@ -373,7 +414,8 @@ libraries, the assets or the OBB are missing, the port sets itself up before any
    `assets/` folder. In a bundle it reads the APK inside (stored, or compressed and unpacked
    first) and copies the OBB out of it too. Each file is written through a `.part` file and
    checked against the archive's CRC-32; compressed entries are unpacked with stb_image's
-   zlib decoder.
+   zlib decoder. The libraries' sizes and CRC-32s go into `game/lib/checksums.txt` (see
+   [library checks](#crash-reports-and-library-checks-028)).
 3. A text screen shows the progress. Then the port asks the homebrew loader to start it again
    (`envSetNextLoad`, with `--after-setup` so it never loops), so the game gets a clean screen.
 
@@ -389,7 +431,7 @@ docs/           install guide, these notes, building; images/ for the README
 .github/        issue and pull request templates
 src/
   core/         guest memory + heap, ELF loader, Dynarmic CPU threads (and JIT reuse), JIT cache,
-                host-call thunks, log
+                host-call thunks, log, crash reports, CRC-32
   hle/          libc/libm/pthread/GLES2/Android APIs (GL thread: gl_queue; OBB cache: file_cache),
                 fake JNI + Java classes
   game/         NFS-specific config, the port's folder layout (paths), first-start setup from the

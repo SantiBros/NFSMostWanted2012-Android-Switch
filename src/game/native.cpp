@@ -27,11 +27,8 @@
 #include <cstring>
 #include <vector>
 
-#if defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
-#include <arm_acle.h>
-#endif
-
 #include "core/cpu.h"
+#include "core/crc32.h"
 #include "core/elf.h"
 #include "core/memory.h"
 #include "core/thunks.h"
@@ -58,43 +55,6 @@ void jump(u32 at, u32 target) {
 bool in_guest(u32 addr, u32 len) { return addr >= mem::NULL_GUARD_END && addr <= mem::g_size && len <= mem::g_size - addr; }
 
 // ---- crc32 ---------------------------------------------------------------------
-u32 g_crc_table[8][256];
-void init_crc_tables() {
-    for (u32 i = 0; i < 256; i++) {
-        u32 c = i;
-        for (int k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
-        g_crc_table[0][i] = c;
-    }
-    for (u32 i = 0; i < 256; i++)
-        for (int t = 1; t < 8; t++) g_crc_table[t][i] = (g_crc_table[t - 1][i] >> 8) ^ g_crc_table[0][g_crc_table[t - 1][i] & 0xFF];
-}
-// zlib crc32(crc, buf, len): the standard reflected CRC-32 (0xEDB88320).
-u32 crc32_update(u32 crc, const u8* p, size_t n) {
-    crc = ~crc;
-#if defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
-    // The Switch's CPU has CRC-32 instructions for exactly this polynomial.
-    while (n && ((uintptr_t)p & 7)) crc = __crc32b(crc, *p++), n--;
-    for (; n >= 8; n -= 8, p += 8) {
-        u64 v;
-        std::memcpy(&v, p, 8);
-        crc = __crc32d(crc, v);
-    }
-    while (n--) crc = __crc32b(crc, *p++);
-#else
-    for (; n >= 8; n -= 8, p += 8) {
-        u32 a, b;
-        std::memcpy(&a, p, 4);
-        std::memcpy(&b, p + 4, 4);
-        a ^= crc;
-        crc = g_crc_table[7][a & 0xFF] ^ g_crc_table[6][(a >> 8) & 0xFF] ^ g_crc_table[5][(a >> 16) & 0xFF] ^
-              g_crc_table[4][a >> 24] ^ g_crc_table[3][b & 0xFF] ^ g_crc_table[2][(b >> 8) & 0xFF] ^
-              g_crc_table[1][(b >> 16) & 0xFF] ^ g_crc_table[0][b >> 24];
-    }
-    while (n--) crc = g_crc_table[0][(crc ^ *p++) & 0xFF] ^ (crc >> 8);
-#endif
-    return ~crc;
-}
-
 bool install_crc32(elf::Module* m) {
     const u32 f = m->base + 0x65F6C8;
     // cmp r1,#0 ; moveq r0,#0 ; bxeq lr ; push {r4-r11,lr} ; ... ; mvn r3, r0
@@ -107,7 +67,7 @@ bool install_crc32(elf::Module* m) {
             return;
         }
         if (!in_guest(buf, len)) fatal("crc32: bad buffer %08X+%u", buf, len);
-        t.regs()[0] = crc32_update(crc, mem::host(buf), len);
+        t.regs()[0] = checksum::crc32(crc, mem::host(buf), len);
     });
     jump(f, thunk);
     return true;
@@ -542,7 +502,6 @@ void apply() {
     }
     elf::Module* m = elf::find("libapp.so");
     if (!m) return;
-    init_crc_tables();
     g_verify = std::getenv("NFSMW_VERIFY_NATIVE") != nullptr;
     const bool crc = install_crc32(m), dec = install_decrypt(m), copy = install_copy(m);
     const bool only_026 = std::getenv("NFSMW_NATIVE_026") != nullptr;  // comparisons with 0.2.6

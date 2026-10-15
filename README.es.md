@@ -109,7 +109,7 @@ propio juego para manejar con control.</sub>
 <img src="docs/images/install-steps.es.png" alt="Instalar en 4 pasos: descarga el zip, copia la carpeta switch a la SD, agrega tu APK y tu OBB a la carpeta game, abre con R + cualquier juego" width="100%">
 
 1. **Descarga.** En la página de [Releases](../../releases), en la sección **Assets**,
-   descarga `NFSMostWanted2012-0.2.7.zip` (no "Source code", que es solo para desarrolladores) y
+   descarga `NFSMostWanted2012-0.2.8.zip` (no "Source code", que es solo para desarrolladores) y
    descomprímelo en tu computadora.
 2. **Copia a la SD.** Copia la carpeta `switch` del zip a la raíz de tu tarjeta SD.
 3. **Agrega tu juego.** Copia tu APK y tu OBB en `switch/NFSMostWanted2012/game/`. No los
@@ -129,7 +129,7 @@ propio juego para manejar con control.</sub>
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.2.7.nro   el port
+├── NFSMostWanted2012-0.2.8.nro   el port
 ├── README.txt                    la guía del jugador (en inglés)
 ├── LICENSES.txt                  componentes de código abierto y sus licencias
 ├── game/                         TUS archivos del juego (nunca los compartas)
@@ -298,6 +298,17 @@ esos cortes ("dropouts").
 </details>
 
 <details>
+<summary><b>El juego se cierra justo después de abrirlo. ¿Qué puedo hacer?</b></summary>
+
+Mira el final de `log.txt` en la carpeta del port. Desde la 0.2.8 dice qué pasó: una sección
+`CRASH` cuando el port se cerró por un error, o una línea marcada `E/` cuando algo anda mal con
+tus archivos. Si el port dice *"A game file is damaged"* (un archivo del juego está dañado), ya
+borró ese archivo: vuelve a poner tu APK en `game/` y ábrelo otra vez, y saca una copia nueva de
+ahí. Revisa también que abras el Homebrew Menu con **R + un juego**. Si sigue cerrándose, abre un
+issue con `log.txt` (y, si hay uno, el archivo más nuevo de `sd:/atmosphere/crash_reports/`).
+</details>
+
+<details>
 <summary><b>¿Cómo reporto un error?</b></summary>
 
 Abre un [issue](../../issues/new/choose) y adjunta `log.txt` de la carpeta del port. Ahí está lo que
@@ -330,7 +341,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-El resultado es `build-switch/NFSMostWanted2012-0.2.7.nro`. Los detalles están en
+El resultado es `build-switch/NFSMostWanted2012-0.2.8.nro`. Los detalles están en
 [docs/BUILDING.md](docs/BUILDING.md) (en inglés).
 
 ## Créditos

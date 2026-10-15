@@ -2,6 +2,33 @@
 
 All notable changes to the port. The release zip's `README.txt` carries the same list.
 
+## [0.2.8]
+
+### Fixed
+- **A cut-off or damaged game library made the port close right after it started, without a
+  message.** The loader trusted the library's headers and read past the end of the file. It now
+  checks each library as it loads it. One that is cut off or malformed is deleted, and the port
+  says so: put your APK back into `game/` and start again, and the port takes a fresh copy out
+  of it.
+- The game libraries are read in one go instead of through a stream, a few hundred bytes at a
+  time. In the Switch-like test build (the console's memory and JIT model, emulated on a PC,
+  which exaggerates the difference), loading the 11 MB game library went from 1.3 s to 0.06 s.
+
+### Added
+- **Crash reports in `log.txt`.** When the port crashes, `log.txt` now ends with a `CRASH`
+  section: what went wrong, where (an offset in the port's code that can be looked up in that
+  release's `nfsmw.elf`), which game thread it was and what it was doing. Before, the log could
+  stop up to a second before the crash, with nothing about it. An error the port did not expect
+  (such as running out of memory) now ends with a message instead of closing silently.
+- `log.txt` shows each library's size and CRC-32, and says when one is not the 1.3.128 build the
+  port was tested with, or when one changed after the setup took it out of the APK (an SD card
+  error, most likely). The setup keeps those checksums in `game/lib/checksums.txt`.
+
+### Changed
+- `log.txt` is written straight through the SD card's file system and closed whenever the port
+  ends.
+- As after every update, the first start rebuilds the JIT cache.
+
 ## [0.2.7]
 
 ### Faster loading

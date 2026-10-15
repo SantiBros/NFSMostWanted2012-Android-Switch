@@ -24,6 +24,7 @@ import fnmatch
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -172,6 +173,21 @@ def main():
             z.write(os.path.join(a.source, f), d + "source/" + f)
     print(f"release: {zpath} ({os.path.getsize(zpath) / 2**20:.1f} MiB, {len(files)} source files)")
     print(f"{nro_name} SHA-256 {sha}")
+
+    # The symbols of this exact build, as a separate release asset: the crash
+    # reports in log.txt give offsets in the port's code (core/crash.h), which
+    # `addr2line -f -e <symbols.elf> <offset>` turns into function names.
+    elf = os.path.join(os.path.dirname(a.nro), "nfsmw.elf")
+    if os.path.isfile(elf) and os.path.getmtime(elf) >= os.path.getmtime(a.nro) - 60:
+        sym = os.path.join(a.out, f"{NAME}-{version}-symbols.elf")
+        strip = os.path.join(os.environ.get("DEVKITPRO", "/opt/devkitpro"), "devkitA64", "bin", "aarch64-none-elf-strip")
+        if os.path.isfile(strip):
+            subprocess.run([strip, "--strip-debug", "-o", sym, elf], check=True)
+        else:
+            shutil.copyfile(elf, sym)
+        print(f"symbols: {sym} ({os.path.getsize(sym) / 2**20:.1f} MiB): attach it to the release too")
+    else:
+        print("symbols: build-switch/nfsmw.elf missing or older than the .nro: no symbols file")
 
 
 if __name__ == "__main__":

@@ -178,6 +178,18 @@ TROUBLESHOOTING
   "... is not a valid OBB"
       The OBB must be the original file, unchanged. Do not unzip it.
 
+  "A game file is damaged"
+      One of the game's libraries in game/lib/ was cut off or damaged (an
+      interrupted copy, or an SD card error). The port has already deleted
+      it: put your APK back into game/ and start again, and it takes a fresh
+      copy out of it. If this keeps happening, check your SD card on a PC.
+
+  The game closes right after it starts
+      Look at the end of log.txt: a CRASH section, or a line marked E/, says
+      what happened. Make sure you started with R + a game. Then please send
+      log.txt (and the newest file in sd:/atmosphere/crash_reports/, if
+      there is one) with a report.
+
   The game crashes or the screen stays black
       In settings.ini, try  direct_memory=off  and then  gl_thread=off
       (one at a time; each takes effect at the next start).
@@ -215,6 +227,16 @@ When you report a problem, attach log.txt from this folder.
 
 WHAT'S NEW
 ----------
+0.2.8
+  * A cut-off or damaged game library no longer makes the port close right
+    after it starts without a word: the port checks each library, deletes a
+    damaged one and says to put the APK back, so it can take a fresh copy.
+  * Crash reports: if the port crashes, log.txt now ends with a CRASH
+    section that says what went wrong and where. Please send it.
+  * The game libraries load faster (read in one go).
+  * log.txt lists each library's checksum and says when one is not the
+    tested 1.3.128 build or has changed since the setup.
+
 0.2.7
   * Faster loading. A new loading screen no longer starts translating the
     game's code from scratch, and the new JIT cache (cache/ folder) remembers

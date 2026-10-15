@@ -12,6 +12,10 @@
 // Nothing is ever downloaded, and the player's APK/bundle is left as it is.
 #pragma once
 
+#include <string>
+
+#include "core/common.h"
+
 namespace game::setup {
 
 // Returns true when it wrote files with the setup screen showing (the caller
@@ -19,5 +23,13 @@ namespace game::setup {
 // nothing was needed or could be done (the start-up checks then say what is
 // missing). Stops with a message when the APK is unusable.
 bool run();
+
+// A game library as loaded: the build the port is made for (Tested: 1.3.128
+// as the port was tested with), or else as the setup took it out of the
+// player's APK (AsExtracted: e.g. a modified APK), changed since then
+// (Changed: an SD card error, most likely; *recorded_crc says what it was), or
+// not known (Unknown: copied by hand).
+enum class LibraryCheck { Tested, AsExtracted, Changed, Unknown };
+LibraryCheck check_library(const std::string& name, u64 size, u32 crc, u32* recorded_crc = nullptr);
 
 }  // namespace game::setup

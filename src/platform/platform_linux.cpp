@@ -492,3 +492,84 @@ void sample_gate(bool, const char* volatile*) {}
 void sample_start() {}
 }  // namespace platform
 #endif
+
+// ---- crash reports (core/crash.h) ---------------------------------------------
+// SIGSEGV is also how Dynarmic's fastmem works on the desktop: its handler is
+// asked first, and only a fault it does not handle (it then restores the
+// default action) is a crash.
+#include <signal.h>
+#include <ucontext.h>
+#include <unistd.h>
+
+#include <atomic>
+
+#include "core/crash.h"
+
+extern "C" char __executable_start[];
+extern "C" char _end[];
+
+namespace platform {
+namespace {
+constexpr int kSignals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE};
+struct sigaction g_prev[32];
+std::atomic<bool> g_crashed{false};
+
+const char* signal_text(int sig) {
+    switch (sig) {
+    case SIGSEGV: return "bad memory access (SIGSEGV)";
+    case SIGBUS: return "bad memory access (SIGBUS)";
+    case SIGILL: return "illegal instruction (SIGILL)";
+    case SIGFPE: return "arithmetic error (SIGFPE)";
+    default: return "fatal signal";
+    }
+}
+
+void on_crash_signal(int sig, siginfo_t* si, void* raw) {
+    struct sigaction& prev = g_prev[sig];
+    if ((prev.sa_flags & SA_SIGINFO) && prev.sa_sigaction) {
+        prev.sa_sigaction(sig, si, raw);
+        struct sigaction now {};
+        sigaction(sig, nullptr, &now);
+        if (now.sa_handler != SIG_DFL) return;  // handled (a fastmem access)
+    } else if (prev.sa_handler == SIG_IGN) {
+        return;
+    }
+    if (!g_crashed.exchange(true)) {
+        crash::HostState s;
+        s.what = signal_text(sig);
+        s.has_address = sig == SIGSEGV || sig == SIGBUS;
+        s.fault_address = (u64)(uintptr_t)si->si_addr;
+        s.image_base = (u64)(uintptr_t)__executable_start;
+        s.image_end = (u64)(uintptr_t)_end;
+        s.image_name = "nfsmw";
+        auto* uc = static_cast<ucontext_t*>(raw);
+#if defined(__x86_64__)
+        s.pc = (u64)uc->uc_mcontext.gregs[REG_RIP];
+        s.sp = (u64)uc->uc_mcontext.gregs[REG_RSP];
+#elif defined(__aarch64__)
+        s.pc = uc->uc_mcontext.pc;
+        s.sp = uc->uc_mcontext.sp;
+        s.lr = uc->uc_mcontext.regs[30];
+#endif
+        crash::report(s);
+    }
+    // Let the fault happen again with the default action (core dump).
+    signal(sig, SIG_DFL);
+}
+}  // namespace
+
+void install_crash_handler() {
+    static char alt_stack[64 * 1024];
+    stack_t ss{};
+    ss.ss_sp = alt_stack;
+    ss.ss_size = sizeof alt_stack;
+    sigaltstack(&ss, nullptr);
+    for (int sig : kSignals) {
+        struct sigaction sa {};
+        sa.sa_sigaction = on_crash_signal;
+        sa.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_NODEFER;
+        sigemptyset(&sa.sa_mask);
+        sigaction(sig, &sa, &g_prev[sig]);
+    }
+}
+}  // namespace platform

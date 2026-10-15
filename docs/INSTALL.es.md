@@ -177,7 +177,7 @@ Need for Speed (necesita `pip install pillow`). El `.nro` publicado nunca trae i
 Con la tarjeta SD como unidad `E:` (todo en una sola línea):
 
 ```
-python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.2.7.nro --out E:\switch\NFSMostWanted2012
+python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.2.8.nro --out E:\switch\NFSMostWanted2012
 ```
 
 En macOS / Linux: `python3 prepare_sd.py ... --out /Volumes/SD/switch/NFSMostWanted2012`.
@@ -196,6 +196,8 @@ Los mensajes del port salen en inglés; aquí está qué significan y qué hacer
 | **"... is not a valid OBB"** (no es un OBB válido) | El OBB debe ser el archivo original. No lo descomprimas, conviertas ni vuelvas a comprimir. |
 | **"Setting up the game did not work"** (la preparación falló) | El mensaje dice por qué: un APK que solo trae la versión de 64 bits (usa uno con `lib/armeabi-v7a`), un archivo dañado (vuelve a copiarlo) o falta de espacio libre. |
 | **"Please start the Homebrew Menu in title-takeover mode"** | Mantén **R** al abrir un juego y luego abre el port. Ver [Abrir el juego](#abrir-el-juego). |
+| **"A game file is damaged"** (un archivo del juego está dañado) | Una de las bibliotecas del juego en `game/lib/` quedó cortada o dañada (una copia interrumpida o un error de la tarjeta SD). El port ya la borró: vuelve a poner tu APK en `game/` y ábrelo otra vez, y saca de ahí una copia nueva. Si pasa seguido, revisa tu tarjeta SD en una computadora. |
+| **El juego se cierra justo después de abrirlo** | Mira el final de `log.txt`: desde la 0.2.8, una sección `CRASH` o una línea marcada `E/` dice qué pasó. Revisa que lo abras en modo title takeover (**R + un juego**). Luego, por favor, [repórtalo](#reportar-un-error) con `log.txt`. |
 | **El juego se cierra o la pantalla queda negra** | En `settings.ini`, prueba `direct_memory=off` y después `gl_thread=off` (de a uno; cada cambio se aplica al volver a abrirlo). |
 | **Pocos FPS** | Abre el menú de depuración (ZL + ZR + Menos) y pon *Frame-rate counter: full*. `log.txt` escribe cada 10 segundos una línea `perf:` que termina diciendo qué frena los FPS (código del juego, driver gráfico o GPU). Subir el reloj de la CPU ayuda cuando dice "game code". |
 | **Tirones cortos aunque el contador marca 30** | Las líneas `perf:` de `log.txt` los cuentan ("hitches") y muestran cuánto esperó el juego a la tarjeta SD ("game waited"). Por favor [repórtalos](#reportar-un-error) con `log.txt`. Una tarjeta SD lenta o casi llena los empeora. |
@@ -208,8 +210,9 @@ Los mensajes del port salen en inglés; aquí está qué significan y qué hacer
 
 Abre un [issue](../../../issues/new/choose) y adjunta **`log.txt`** de la carpeta del port. Indica la
 versión del port, las versiones de tu firmware y de Atmosphère, y si jugabas en modo portátil o en
-el dock. Nunca adjuntes archivos del juego (APK, OBB o archivos `.so`). Puedes escribir el issue en
-español.
+el dock. Si el juego se cerró con un error, adjunta también el archivo más nuevo de
+`sd:/atmosphere/crash_reports/`, si hay uno. Nunca adjuntes archivos del juego (APK, OBB o archivos
+`.so`). Puedes escribir el issue en español.
 
 ## Glosario
 

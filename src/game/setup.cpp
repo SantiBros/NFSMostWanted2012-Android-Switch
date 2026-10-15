@@ -9,11 +9,13 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "core/common.h"
+#include "core/crc32.h"
 #include "game/config.h"
 #include "game/paths.h"
 #include "platform/platform.h"
@@ -46,7 +48,18 @@ const std::string kLibPrefix = "lib/armeabi-v7a/";
 // loose into game/.
 const char* const kAssetItems[] = {"ext_data.bin", "int_data.bin", "licenseserver", "obb.size", "published",
                                    "splash.png"};
-constexpr u32 kTestedLibappCrc = 0xD69D3C65;  // libapp.so of 1.3.128 (armeabi-v7a)
+// The libraries of 1.3.128 (armeabi-v7a), the build the port is made for.
+struct TestedLib {
+    const char* name;
+    u64 size;
+    u32 crc;
+};
+constexpr TestedLib kTested[] = {{"libapp.so", 11346048, 0xD69D3C65},
+                                 {"libc++_shared.so", 571240, 0x30F367BE},
+                                 {"libfmodex.so", 840924, 0xD8E8ABCB},
+                                 {"libfmodevent.so", 356124, 0xB9932D65},
+                                 {"libNimble.so", 13728, 0x12840D3C}};
+constexpr u32 kTestedLibappCrc = kTested[0].crc;
 // Compressed entries are unpacked in memory; the libraries are 11 MB at most.
 constexpr u64 kMaxInflate = 256ull << 20;
 
@@ -123,6 +136,40 @@ void walk(const std::string& dir, int depth, const std::vector<std::string>& ski
             files.push_back(p);
         }
     }
+}
+
+// ---- what the setup took out of the APK ----------------------------------------------
+// game/lib/checksums.txt: "<library> <size> <crc32>" for each library the setup
+// wrote (a modified APK has libraries of its own: they are not damaged, only
+// different from the tested build). A library that no longer matches its line
+// changed after the setup: an SD card error, most likely.
+struct Record {
+    u64 size = 0;
+    u32 crc = 0;
+};
+std::string records_file() { return paths::lib_dir() + "/checksums.txt"; }
+std::map<std::string, Record> read_records() {
+    std::map<std::string, Record> out;
+    FILE* f = std::fopen(records_file().c_str(), "r");
+    if (!f) return out;
+    char name[128];
+    unsigned long long size = 0;
+    unsigned crc = 0;
+    while (std::fscanf(f, "%127s %llu %x", name, &size, &crc) == 3) out[name] = {size, crc};
+    std::fclose(f);
+    return out;
+}
+void write_records(const std::map<std::string, Record>& records) {
+    const std::string path = records_file(), tmp = path + ".part";
+    FILE* f = std::fopen(tmp.c_str(), "w");
+    if (!f) return;
+    for (const auto& [name, r] : records) std::fprintf(f, "%s %llu %08X\n", name.c_str(), (unsigned long long)r.size, r.crc);
+    if (std::fclose(f) != 0) {
+        std::remove(tmp.c_str());
+        return;
+    }
+    std::remove(path.c_str());
+    std::rename(tmp.c_str(), path.c_str());
 }
 
 // ---- what is missing -----------------------------------------------------------------
@@ -208,21 +255,7 @@ u16 le16(const u8* p) { return (u16)(p[0] | p[1] << 8); }
 u32 le32(const u8* p) { return (u32)p[0] | (u32)p[1] << 8 | (u32)p[2] << 16 | (u32)p[3] << 24; }
 u64 le64(const u8* p) { return le32(p) | (u64)le32(p + 4) << 32; }
 
-u32 crc32(u32 crc, const u8* p, size_t n) {
-    static u32 table[256];
-    static bool init = false;
-    if (!init) {
-        for (u32 i = 0; i < 256; i++) {
-            u32 c = i;
-            for (int k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
-            table[i] = c;
-        }
-        init = true;
-    }
-    crc = ~crc;
-    while (n--) crc = table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
-    return ~crc;
-}
+using checksum::crc32;
 
 struct Entry {
     std::string name;
@@ -441,6 +474,16 @@ struct Source {
 
 }  // namespace
 
+LibraryCheck check_library(const std::string& name, u64 size, u32 crc, u32* recorded_crc) {
+    for (const TestedLib& t : kTested)
+        if (name == t.name && size == t.size && crc == t.crc) return LibraryCheck::Tested;
+    const auto records = read_records();
+    const auto it = records.find(name);
+    if (it == records.end()) return LibraryCheck::Unknown;
+    if (recorded_crc) *recorded_crc = it->second.crc;
+    return it->second.size == size && it->second.crc == crc ? LibraryCheck::AsExtracted : LibraryCheck::Changed;
+}
+
 bool run() {
     if (all_there()) return false;
     LOGI("setup: game files missing (libraries: %zu, assets: %s, OBB: %s): looking for them",
@@ -588,6 +631,8 @@ bool run() {
     LOGI("setup: writing %zu files from %s", items.size(), source_label.c_str());
     if (libs[0].entry && libs[0].entry->crc != kTestedLibappCrc)
         LOGW("setup: libapp.so (crc32 %08X) is not the tested 1.3.128 build; it may still work", libs[0].entry->crc);
+    std::map<std::string, Record> records = read_records();  // checksums.txt, with the libraries written now
+    bool wrote_lib = false;
     for (size_t i = 0; i < items.size(); i++) {
         const Item& it = items[i];
         for (size_t s = 0; s < screen.steps.size(); s++)
@@ -610,7 +655,12 @@ bool run() {
             fail(err);
         }
         LOGI("setup: wrote %s (%llu bytes)", show(it.dest).c_str(), (unsigned long long)it.src.entry->usize);
+        if (parent(it.dest) == paths::lib_dir()) {
+            records[base_name(it.dest)] = {it.src.entry->usize, it.src.entry->crc};
+            wrote_lib = true;
+        }
     }
+    if (wrote_lib) write_records(records);
     for (const std::string& t : temp_files) std::remove(t.c_str());
 
     for (Step& s : screen.steps) s.state = 2;

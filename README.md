@@ -103,7 +103,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 <img src="docs/images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
 
 1. **Download.** On the [Releases](../../releases) page, under **Assets**, download
-   `NFSMostWanted2012-0.2.7.zip` (not "Source code", which is only for developers) and unzip it on
+   `NFSMostWanted2012-0.2.8.zip` (not "Source code", which is only for developers) and unzip it on
    your computer.
 2. **Copy to the SD card.** Copy the `switch` folder from the zip to the root of your SD card.
 3. **Add your game.** Copy your APK and your OBB into `switch/NFSMostWanted2012/game/`. Don't unzip or
@@ -122,7 +122,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.2.7.nro   the port
+├── NFSMostWanted2012-0.2.8.nro   the port
 ├── README.txt                    the player's guide
 ├── LICENSES.txt                  open-source components and their licenses
 ├── game/                         YOUR game files (never share them)
@@ -288,6 +288,17 @@ a moment, please report it with `log.txt`: it counts those "dropouts".
 </details>
 
 <details>
+<summary><b>The game closes right after it starts. What can I do?</b></summary>
+
+Look at the end of `log.txt` in the port's folder. Since 0.2.8 it says what happened: a `CRASH`
+section when the port crashed, or a line marked `E/` when something is wrong with your files. If
+the port says *"A game file is damaged"*, it has already deleted that file: put your APK back into
+`game/` and start again, and it takes a fresh copy out of it. Also make sure you start the
+Homebrew Menu with **R + a game**. If it still closes, please open an issue with `log.txt` (and,
+if there is one, the newest file in `sd:/atmosphere/crash_reports/`).
+</details>
+
+<details>
 <summary><b>How do I report a bug?</b></summary>
 
 Open an [issue](../../issues/new/choose) and attach `log.txt` from the port's folder. It says what
@@ -320,7 +331,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-The result is `build-switch/NFSMostWanted2012-0.2.7.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
+The result is `build-switch/NFSMostWanted2012-0.2.8.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
 the details, the Linux test build used for development, and how a release is made.
 
 ## Credits

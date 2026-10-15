@@ -3,7 +3,7 @@ project(nfsmw_loader CXX C)
 
 # The port's version: shown in the Homebrew Menu / Sphaira, in the .nro and zip
 # file names (NFSMostWanted2012-<version>.nro) and at the top of log.txt.
-set(NFSMW_VERSION "0.2.7")
+set(NFSMW_VERSION "0.2.8")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -47,6 +47,8 @@ set(CORE_SOURCES
   src/core/memory.cpp
   src/core/cpu.cpp
   src/core/elf.cpp
+  src/core/crc32.cpp
+  src/core/crash.cpp
   src/core/thunks.cpp
   src/core/hook.cpp
   src/hle/hle.cpp

@@ -1,9 +1,10 @@
 #include "core/elf.h"
 
-#include <fstream>
+#include <cstdio>
 #include <mutex>
 
 #include "core/cpu.h"
+#include "core/crc32.h"
 #include "core/memory.h"
 #include "core/thunks.h"
 
@@ -73,10 +74,15 @@ u32 resolve(Module* self, const Sym* s, const char* name) {
 }
 
 void apply_rels(Module* m, u32 rels, u32 size) {
-    for (u32 off = 0; off < size; off += sizeof(Rel)) {
+    u32 bad = 0;
+    for (u32 off = 0; off + sizeof(Rel) <= size; off += sizeof(Rel)) {
         const Rel* r = mem::ptr<Rel>(rels + off);
         u32 type = r->info & 0xFF, symi = r->info >> 8;
         u32 P = m->base + r->offset;
+        if (!m->contains(P) || !m->contains(P + 3) || (symi && symi >= m->nsyms)) {
+            bad++;  // would write outside the library: a damaged file
+            continue;
+        }
         u32 S = 0;
         if (symi && type != R_ARM_RELATIVE) {
             const Sym* s = sym_at(m, symi);
@@ -92,34 +98,63 @@ void apply_rels(Module* m, u32 rels, u32 size) {
         default: LOGW("%s: unsupported relocation type %u at 0x%X", m->name.c_str(), type, r->offset);
         }
     }
+    if (bad) LOGE("%s: %u relocations point outside the library (skipped): the file is damaged", m->name.c_str(), bad);
 }
 
 }  // namespace
 
-Module* load(const std::string& path, const std::string& name) {
-    std::ifstream f(path, std::ios::binary);
+Module* load(const std::string& path, const std::string& name, std::string* error) {
+    auto fail = [&](const std::string& why) -> Module* {
+        LOGE("%s: %s", path.c_str(), why.c_str());
+        if (error) *error = why;
+        return nullptr;
+    };
+    if (error) error->clear();
+    // Read the whole file with one read (0.2.7 and earlier read it through a
+    // stream, a few hundred bytes per request to the SD card).
+    FILE* f = std::fopen(path.c_str(), "rb");
     if (!f) {
         LOGE("cannot open %s", path.c_str());
         return nullptr;
     }
-    std::vector<u8> file((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    if (file.size() < sizeof(Ehdr)) return nullptr;
+    std::vector<u8> file;
+    if (std::fseek(f, 0, SEEK_END) == 0) {
+        const long size = std::ftell(f);
+        if (size > 0 && size < (256l << 20)) {
+            file.resize((size_t)size);
+            std::fseek(f, 0, SEEK_SET);
+            if (std::fread(file.data(), 1, file.size(), f) != file.size()) file.clear();
+        }
+    }
+    std::fclose(f);
+    // A damaged or incomplete library must not be loaded: its headers would
+    // point past the end of the data, and the loader would crash.
+    if (file.size() < sizeof(Ehdr)) return fail("empty or too short to be a library");
     Ehdr eh;
     std::memcpy(&eh, file.data(), sizeof eh);
-    if (std::memcmp(eh.ident, "\x7f" "ELF", 4) || eh.ident[4] != 1 || eh.machine != 40) {
-        LOGE("%s is not a 32-bit ARM ELF", path.c_str());
-        return nullptr;
-    }
+    if (std::memcmp(eh.ident, "\x7f" "ELF", 4) || eh.ident[4] != 1 || eh.machine != 40)
+        return fail("not a 32-bit ARM library (armeabi-v7a)");
+    if ((u64)eh.phoff + (u64)eh.phnum * sizeof(Phdr) > file.size() || eh.phnum == 0)
+        return fail("cut off: the file is shorter than its headers say (an incomplete copy?)");
     std::vector<Phdr> ph(eh.phnum);
     std::memcpy(ph.data(), file.data() + eh.phoff, eh.phnum * sizeof(Phdr));
 
     u32 lo = 0xFFFFFFFF, hi = 0;
     for (auto& p : ph)
         if (p.type == PT_LOAD) {
+            if ((u64)p.offset + p.filesz > file.size())
+                return fail("cut off: " + std::to_string((u64)p.offset + p.filesz - file.size()) +
+                            " bytes are missing at the end (an incomplete copy?)");
+            if (p.filesz > p.memsz || (u64)p.vaddr + p.memsz > (1ull << 30))
+                return fail("damaged: invalid program header");
             lo = std::min(lo, p.vaddr & ~0xFFFu);
             hi = std::max(hi, align_up(p.vaddr + p.memsz, 0x1000));
         }
+    if (hi <= lo || hi - lo > (256u << 20)) return fail("damaged: no loadable segments");
+    const u32 crc = checksum::crc32(0, file.data(), file.size());
     auto* m = new Module;
+    m->file_size = (u32)file.size();
+    m->file_crc = crc;
     m->name = name;
     m->size = hi - lo;
     {
@@ -145,10 +180,19 @@ Module* load(const std::string& path, const std::string& name) {
     }
     u32 dyn = 0, hash = 0;
     for (auto& p : ph)
-        if (p.type == PT_DYNAMIC) dyn = m->base + p.vaddr;
-    if (!dyn) fatal("%s has no dynamic section", name.c_str());
+        if (p.type == PT_DYNAMIC && p.vaddr >= lo && (u64)p.vaddr + p.memsz <= hi) dyn = m->base + p.vaddr;
+    if (!dyn) {
+        delete m;
+        return fail("damaged: no dynamic section");
+    }
+    // Every table the dynamic section points to must be inside the library.
+    auto inside = [&](u32 a, u64 len) { return a >= m->base + lo && (u64)a + len <= (u64)m->base + hi; };
     std::vector<u32> needed_off;
     for (u32 a = dyn;; a += sizeof(Dyn)) {
+        if (!inside(a, sizeof(Dyn))) {
+            delete m;
+            return fail("damaged: dynamic section runs past the end");
+        }
         const Dyn* d = mem::ptr<Dyn>(a);
         if (d->tag == DT_NULL) break;
         switch (d->tag) {
@@ -168,8 +212,16 @@ Module* load(const std::string& path, const std::string& name) {
         default: break;
         }
     }
-    for (u32 o : needed_off) m->needed.emplace_back(mem::str(m->strtab + o));
-    if (!hash) fatal("%s has no DT_HASH", name.c_str());
+    const bool tables_ok = hash && inside(hash, 8) && inside(m->strtab, 1) && inside(m->symtab, sizeof(Sym)) &&
+                           (!m->rel || inside(m->rel, m->relsz)) && (!m->jmprel || inside(m->jmprel, m->pltrelsz)) &&
+                           (!m->init_array || inside(m->init_array, m->init_arraysz)) &&
+                           (!m->fini_array || inside(m->fini_array, m->fini_arraysz));
+    if (!tables_ok || !inside(m->symtab, (u64)mem::r32(hash + 4) * sizeof(Sym))) {
+        delete m;
+        return fail("damaged: its symbol or relocation tables point outside it");
+    }
+    for (u32 o : needed_off)
+        if (inside(m->strtab + o, 1)) m->needed.emplace_back(mem::str(m->strtab + o));
     m->nsyms = mem::r32(hash + 4);  // nchain == number of symbols
     for (u32 i = 1; i < m->nsyms; i++) {
         const Sym* s = sym_at(m, i);
@@ -180,7 +232,8 @@ Module* load(const std::string& path, const std::string& name) {
         u8 type = s->info & 0xF;
         if (type == STT_FUNC) m->by_addr[addr & ~1u] = n;
     }
-    LOGI("loaded %s at 0x%08X (%u KiB, %zu exports)", name.c_str(), m->base, m->size / 1024, m->exports.size());
+    LOGI("loaded %s at 0x%08X (%u KiB, %zu exports; file %u bytes, crc32 %08X)", name.c_str(), m->base,
+         m->size / 1024, m->exports.size(), m->file_size, m->file_crc);
     std::lock_guard lk(g_mutex);
     g_modules.push_back(m);
     return m;
@@ -233,26 +286,30 @@ u32 lookup_global(const std::string& name) {
     return thunks::lookup(name);
 }
 
-std::string describe(u32 addr) {
-    char buf[256];
+void describe_into(u32 addr, char* buf, size_t size) {
     if (const char* tn = thunks::name_at(addr & ~7u)) {
-        std::snprintf(buf, sizeof buf, "0x%08X <host:%s>", addr, tn);
-        return buf;
+        std::snprintf(buf, size, "0x%08X <host:%s>", addr, tn);
+        return;
     }
     Module* m = module_for(addr);
     if (!m) {
-        std::snprintf(buf, sizeof buf, "0x%08X", addr);
-        return buf;
+        std::snprintf(buf, size, "0x%08X", addr);
+        return;
     }
     u32 a = addr & ~1u;
     auto it = m->by_addr.upper_bound(a);
     if (it != m->by_addr.begin()) {
         --it;
-        std::snprintf(buf, sizeof buf, "0x%08X %s+0x%X <%s+0x%X>", addr, m->name.c_str(), a - m->base,
-                      it->second.c_str(), a - it->first);
+        std::snprintf(buf, size, "0x%08X %s+0x%X <%s+0x%X>", addr, m->name.c_str(), a - m->base, it->second.c_str(),
+                      a - it->first);
     } else {
-        std::snprintf(buf, sizeof buf, "0x%08X %s+0x%X", addr, m->name.c_str(), a - m->base);
+        std::snprintf(buf, size, "0x%08X %s+0x%X", addr, m->name.c_str(), a - m->base);
     }
+}
+
+std::string describe(u32 addr) {
+    char buf[256];
+    describe_into(addr, buf, sizeof buf);
     return buf;
 }
 
