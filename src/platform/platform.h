@@ -123,5 +123,8 @@ AudioStats audio_stats();
 // Memory the process uses, and (Switch) how much it may use, in bytes. False
 // when not known.
 bool memory_usage(u64& used, u64& total);
+// One line for log.txt about the system the port runs on: firmware, how it
+// was started, the memory it may use ("" if nothing to say).
+std::string system_info();
 
 }  // namespace platform

@@ -99,6 +99,7 @@ int main(int argc, char** argv) {
     if (!S.size_forced) platform::preferred_display_size(S.width, S.height);
     LOGI("display: %dx%d", S.width, S.height);
     LOGI("NFS Most Wanted 2012 loader %s starting (folder: %s)", NFSMW_VERSION, game::paths::root().c_str());
+    if (const std::string sys = platform::system_info(); !sys.empty()) LOGI("%s", sys.c_str());
     game::paths::prepare();  // tidy up an older folder layout, create game/ and save/
     // First start: set the game up from the player's APK (in game/) when the
     // libraries, assets or OBB are missing, then start again on a clean screen.
@@ -117,6 +118,9 @@ int main(int argc, char** argv) {
     if (game::prefs::at_startup().gl_thread && !std::getenv("NFSMW_NO_GL_THREAD")) platform::reserve_core_for_gl(2);
     game::motion::load_settings();
     cpu::attach_current_thread(8 * 1024 * 1024);
+    if (u64 used = 0, total = 0; platform::memory_usage(used, total) && total > used)
+        LOGI("memory: %llu MiB free after reserving the game's memory and the JIT",
+             (unsigned long long)((total - used) >> 20));
 
     // Same order as GameActivityMain.onCreate's System.loadLibrary calls.
     const std::string lib = game::paths::lib_dir() + "/";

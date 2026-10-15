@@ -565,6 +565,33 @@ bool get_clocks(Clocks& c) {
 
 bool is_docked() { return appletGetOperationMode() == AppletOperationMode_Console; }
 
+std::string system_info() {
+    char buf[384];
+    const u32 v = hosversionGet();
+    const char* how = "an unknown way";
+    switch (appletGetAppletType()) {
+    case AppletType_Application: how = "as an application (R + a game, or a forwarder)"; break;
+    case AppletType_SystemApplication: how = "as a system application"; break;
+    case AppletType_LibraryApplet: how = "as an applet (the Album)"; break;
+    case AppletType_OverlayApplet: how = "as an overlay"; break;
+    case AppletType_SystemApplet: how = "as the system applet"; break;
+    default: break;
+    }
+    // The loader that started the .nro ("nx-hbloader ...", or another menu's).
+    std::string loader;
+    if (const char* li = envGetLoaderInfo()) {
+        loader.assign(li, strnlen(li, std::min<u64>(envGetLoaderInfoSize(), 64)));
+        if (const size_t nl = loader.find('\n'); nl != std::string::npos) loader.resize(nl);
+    }
+    u64 used = 0, total = 0;
+    memory_usage(used, total);
+    std::snprintf(buf, sizeof buf, "system: firmware %u.%u.%u%s, started %s%s%s, memory %llu MiB free of %llu MiB",
+                  HOSVER_MAJOR(v), HOSVER_MINOR(v), HOSVER_MICRO(v), hosversionIsAtmosphere() ? " (Atmosphere)" : "",
+                  how, loader.empty() ? "" : " by ", loader.c_str(), (unsigned long long)((total - used) >> 20),
+                  (unsigned long long)(total >> 20));
+    return buf;
+}
+
 bool memory_usage(u64& used, u64& total) {
     return R_SUCCEEDED(svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0)) &&
            R_SUCCEEDED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0));

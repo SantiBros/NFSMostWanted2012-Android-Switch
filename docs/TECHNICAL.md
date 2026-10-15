@@ -215,7 +215,7 @@ made that log useless, and both changed:
   writes through the same file handle as the log. When the handler returns, libnx ends the
   program and the system shows its error (Atmosphère writes its own report too). A C++
   exception nobody caught (`std::bad_alloc` when memory runs out) is reported the same way and
-  ends with a message. `NFSMW_TEST_CRASH=<libs|init|frame>:<host|guest|thread|throw>` crashes
+  ends with a message. `NFSMW_TEST_CRASH=<libs|init|frame>:<host|guest|thread|throw|oom>` crashes
   on purpose, to check all this.
 - **A damaged library crashed the loader.** `elf::load` read the program headers and segments
   where the file's headers said, without checking that the file was that long: a cut-off copy
@@ -226,6 +226,11 @@ made that log useless, and both changed:
   message saying to put the APK back so that the setup takes a fresh copy. The libraries are
   also read in one go (0.2.7 read them through a stream into a vector, a few hundred bytes per
   request to the SD card).
+
+Before any of that, `log.txt` gets a `system:` line on the Switch (firmware version, whether it
+runs on Atmosphère, the applet type the port was started as and the loader's name, the memory
+free of the total) and, once the guest memory and the main thread's JIT are reserved, the
+memory left: the facts that differ between consoles where the same build works and fails.
 
 `log.txt` also gets each library's size and CRC-32. The setup writes the size and CRC-32 of
 every library it takes out of the APK to `game/lib/checksums.txt`; at each start, a library

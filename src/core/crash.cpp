@@ -69,9 +69,16 @@ void on_terminate() {
     HostState s;
     s.what = memory ? "out of memory (std::bad_alloc)" : "an error it did not expect (uncaught C++ exception)";
     report(s);
-    if (memory)
-        fatal("The port ran out of memory.\n\nIf you use overlays or sysmodules that stay in memory, try without "
-              "them. Please report this with log.txt.");
+    if (memory) {
+        u64 used = 0, total = 0;
+        char numbers[96] = "";
+        if (platform::memory_usage(used, total) && total >= used)
+            std::snprintf(numbers, sizeof numbers, " (%llu MiB free of %llu MiB)", (unsigned long long)((total - used) >> 20),
+                          (unsigned long long)(total >> 20));
+        fatal("The port ran out of memory%s.\n\nStart the Homebrew Menu by holding R while you launch a game (not "
+              "from the Album), so the port gets all of the memory a game gets. Please report this with log.txt.",
+              numbers);
+    }
     fatal("The port stopped on an error it did not expect:\n%s\n\nPlease report this with log.txt.", what);
 }
 }  // namespace
@@ -150,6 +157,7 @@ void test_point(const char* stage) {
     const std::string kind = colon ? colon + 1 : "host";
     LOGW("NFSMW_TEST_CRASH: crashing on purpose (%s at %s)", kind.c_str(), stage);
     if (kind == "throw") throw std::runtime_error("test exception (NFSMW_TEST_CRASH)");
+    if (kind == "oom") throw std::bad_alloc();
     if (kind == "thread") {
         std::thread([] { *static_cast<volatile int*>(nullptr) = 1; }).join();
         return;

@@ -235,7 +235,8 @@ WHAT'S NEW
     section that says what went wrong and where. Please send it.
   * The game libraries load faster (read in one go).
   * log.txt lists each library's checksum and says when one is not the
-    tested 1.3.128 build or has changed since the setup.
+    tested 1.3.128 build or has changed since the setup, and starts with
+    the firmware version, how the port was started and its memory.
 
 0.2.7
   * Faster loading. A new loading screen no longer starts translating the

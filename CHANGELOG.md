@@ -23,6 +23,9 @@ All notable changes to the port. The release zip's `README.txt` carries the same
 - `log.txt` shows each library's size and CRC-32, and says when one is not the 1.3.128 build the
   port was tested with, or when one changed after the setup took it out of the APK (an SD card
   error, most likely). The setup keeps those checksums in `game/lib/checksums.txt`.
+- `log.txt` starts with the console's firmware version, how the port was started (as an
+  application with R + a game or a forwarder, or as an applet) and by which loader, and the
+  memory it may use; after the start-up reservations it logs the memory left.
 
 ### Changed
 - `log.txt` is written straight through the SD card's file system and closed whenever the port

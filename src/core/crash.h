@@ -39,7 +39,7 @@ void report(const HostState& s);
 
 // Debugging aid: NFSMW_TEST_CRASH=<stage>:<kind> crashes on purpose at that
 // point of the start-up (stages: libs, init, frame; kinds: host, guest,
-// thread, throw), to check the reports.
+// thread, throw, oom), to check the reports.
 void test_point(const char* stage);
 
 }  // namespace crash

@@ -411,6 +411,7 @@ bool memory_usage(u64& used, u64& total) {
     return ok;
 }
 AudioStats audio_stats() { return {}; }
+std::string system_info() { return ""; }
 
 }  // namespace platform
 
