@@ -30,12 +30,22 @@ folder, and race through Fairhaven, handheld or docked.
 > This port runs the **Android** version only. Files from the PC, PlayStation 3, Xbox 360, PS Vita,
 > Wii U or iOS versions of Most Wanted (2012) don't work.
 
+> [!TIP]
+> **New in 0.3.0**
+> - **Dock and undock while you play**: the resolution follows at once (720p handheld, 1080p docked).
+> - **The Switch's buttons in the game**: the controls pages and tutorials say +, −, A, B, X, Y
+>   instead of the MOGA gamepad's buttons, in all 11 languages, with new pictures of the controls:
+>   a handheld console in handheld mode and a controller when docked ([see them](#controls)).
+> - **A rare crash while loading a race is fixed.**
+>
+> All the details are in the [changelog](CHANGELOG.md).
+
 ## Screenshots
 
 <table>
   <tr>
     <td width="50%"><img src="docs/images/screenshots/race-intro.jpg" alt="Race intro cinematic"></td>
-    <td width="50%"><img src="docs/images/screenshots/race-city.jpg" alt="Racing through the city in first place"></td>
+    <td width="50%"><img src="docs/images/screenshots/race-city.jpg" alt="Racing through the city, with the game's steering tutorial naming the Switch"></td>
   </tr>
   <tr>
     <td align="center"><sub>The race intro, rendered in real time</sub></td>
@@ -161,6 +171,30 @@ progress are moved over automatically.
 
 **Driving**: the port hands the game a MOGA Pro gamepad, which it supports natively. Since 0.3.0 the
 game's controls pages and tutorials show the Switch's buttons (+ and − instead of Start and Select).
+
+In the game, the pause menu's **CONTROLS** shows them, with a picture that matches how you play: a
+handheld console in handheld mode, a controller when docked (it changes when you dock or undock).
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/controls-handheld-game.jpg" alt="Game controls page in handheld mode, with a drawing of a handheld console"></td>
+    <td width="50%"><img src="docs/images/screenshots/controls-docked-game.jpg" alt="Game controls page when docked, with a drawing of a controller"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Game controls, handheld mode</sub></td>
+    <td align="center"><sub>Game controls, docked</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshots/controls-handheld-menu.jpg" alt="Menu controls page in handheld mode"></td>
+    <td><img src="docs/images/screenshots/controls-docked-menu.jpg" alt="Menu controls page when docked"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Menu controls, handheld mode</sub></td>
+    <td align="center"><sub>Menu controls, docked</sub></td>
+  </tr>
+</table>
+
+<sub>The pictures are the port's own drawings, with the Switch's button layout.</sub>
 
 | Switch | Game |
 |---|---|

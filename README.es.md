@@ -31,12 +31,23 @@ en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
 > Este port funciona **solo con la versión Android**. Los archivos de las versiones de PC,
 > PlayStation 3, Xbox 360, PS Vita, Wii U o iOS de Most Wanted (2012) no sirven.
 
+> [!TIP]
+> **Novedades de la 0.3.0**
+> - **Conecta o saca la consola del dock mientras juegas**: la resolución cambia al momento (720p en
+>   modo portátil, 1080p en el dock).
+> - **Los botones de la Switch en el juego**: las páginas de controles y los tutoriales dicen +, −, A,
+>   B, X, Y en vez de los botones del control MOGA, en los 11 idiomas, con nuevos dibujos de los
+>   controles: una consola portátil en modo portátil y un control en el dock ([verlos](#controles)).
+> - **Corregido un cierre poco frecuente al cargar una carrera.**
+>
+> Todos los detalles están en el [registro de cambios](CHANGELOG.md) (en inglés).
+
 ## Capturas
 
 <table>
   <tr>
     <td width="50%"><img src="docs/images/screenshots/race-intro.jpg" alt="La presentación de una carrera"></td>
-    <td width="50%"><img src="docs/images/screenshots/race-city.jpg" alt="Corriendo por la ciudad en primer lugar"></td>
+    <td width="50%"><img src="docs/images/screenshots/race-city.jpg" alt="Corriendo por la ciudad, con el tutorial de dirección del juego que nombra la Switch"></td>
   </tr>
   <tr>
     <td align="center"><sub>La presentación de la carrera, en tiempo real</sub></td>
@@ -172,6 +183,31 @@ progreso se mueven solos.
 **Manejo**: el port le presenta al juego un control MOGA Pro, que soporta de forma nativa. Desde la
 0.3.0 las páginas de controles y los tutoriales del juego muestran los botones de la Switch (+ y − en
 vez de Start y Select).
+
+En el juego, **CONTROLS** en el menú de pausa los muestra, con un dibujo que corresponde a cómo
+juegas: una consola portátil en modo portátil y un control en el dock (cambia al poner o sacar la
+consola del dock).
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/controls-handheld-game.jpg" alt="Página de controles del juego en modo portátil, con el dibujo de una consola portátil"></td>
+    <td width="50%"><img src="docs/images/screenshots/controls-docked-game.jpg" alt="Página de controles del juego en el dock, con el dibujo de un control"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Controles del juego, modo portátil</sub></td>
+    <td align="center"><sub>Controles del juego, en el dock</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshots/controls-handheld-menu.jpg" alt="Página de controles de los menús en modo portátil"></td>
+    <td><img src="docs/images/screenshots/controls-docked-menu.jpg" alt="Página de controles de los menús en el dock"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Controles de los menús, modo portátil</sub></td>
+    <td align="center"><sub>Controles de los menús, en el dock</sub></td>
+  </tr>
+</table>
+
+<sub>Los dibujos son propios del port, con la distribución de botones de la Switch.</sub>
 
 | Switch | Juego |
 |---|---|
