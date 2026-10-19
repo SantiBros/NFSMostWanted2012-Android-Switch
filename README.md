@@ -194,7 +194,8 @@ handheld console in handheld mode, a controller when docked (it changes when you
   </tr>
 </table>
 
-<sub>The pictures are the port's own drawings, with the Switch's button layout.</sub>
+<sub>The pictures are the port's own drawings, with the Switch's button layout: similar to a Switch,
+but not the same, on purpose ([why](#faq)).</sub>
 
 | Switch | Game |
 |---|---|
@@ -312,6 +313,20 @@ Running homebrew on an emuMMC and keeping your SD card backed up is the usual ad
 
 Your whole career (money, reputation and Most Wanted rank, cars, events) is one file:
 `switch/NFSMostWanted2012/save/progress/nfstr_save.sb`. Copy it somewhere safe from time to time.
+</details>
+
+<details>
+<summary><b>Why do the controller pictures look similar to a Switch, but not the same?</b></summary>
+
+Because the shape and look of the Switch and its controllers are Nintendo's own design, and this
+project doesn't copy Nintendo's (or EA's) artwork. The port only ships what it made itself, and
+drawings that copied the console would put the project at risk.
+
+So the pictures on the controls pages are original drawings in the game's style. What matters
+for playing is the same as on your Switch: every button is where it is on the console (X on top,
+Y left, A right, B bottom, − and + at the top, L and R on the shoulders), and the game's lines
+point at the right one. The picture also follows how you play: a handheld console in handheld
+mode, a controller when docked.
 </details>
 
 <details>

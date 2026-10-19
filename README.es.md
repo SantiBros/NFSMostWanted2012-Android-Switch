@@ -207,7 +207,8 @@ consola del dock).
   </tr>
 </table>
 
-<sub>Los dibujos son propios del port, con la distribución de botones de la Switch.</sub>
+<sub>Los dibujos son propios del port, con la distribución de botones de la Switch: parecidos a una
+Switch, pero no iguales, a propósito ([por qué](#preguntas-frecuentes)).</sub>
 
 | Switch | Juego |
 |---|---|
@@ -328,6 +329,20 @@ mantener un respaldo de tu tarjeta SD.
 
 Toda tu carrera (dinero, reputación y rango Most Wanted, autos, eventos) es un solo archivo:
 `switch/NFSMostWanted2012/save/progress/nfstr_save.sb`. Cópialo a un lugar seguro de vez en cuando.
+</details>
+
+<details>
+<summary><b>¿Por qué los dibujos del control se parecen a una Switch, pero no son iguales?</b></summary>
+
+Porque la forma y el aspecto de la Switch y de sus controles son un diseño propio de Nintendo, y
+este proyecto no copia imágenes ni diseños de Nintendo (ni de EA). El port solo incluye lo que hizo
+él mismo, y unos dibujos que copiaran la consola pondrían el proyecto en riesgo.
+
+Por eso los dibujos de las páginas de controles son originales, al estilo del juego. Lo que importa
+para jugar es igual que en tu Switch: cada botón está donde está en la consola (X arriba, Y a la
+izquierda, A a la derecha, B abajo, − y + arriba, L y R en los gatillos), y las líneas del juego
+apuntan al botón correcto. El dibujo también sigue cómo juegas: una consola portátil en modo
+portátil y un control cuando está en el dock.
 </details>
 
 <details>
