@@ -17,11 +17,18 @@ All notable changes to the port. The release zip's `README.txt` carries the same
 - **The game's texts name the Switch's buttons.** The game was written for a MOGA gamepad, so
   its controls page and tutorials said "MOGA", "Start" and "Select". In all 11 languages they now
   say "Switch", + and − ("SWITCH GAME CONTROLS", "Tap the + button to PAUSE"). The port changes
-  the game's text tables in memory as the game reads them; the OBB on your SD card is not
-  touched.
-- **The controller picture on the controls page** no longer shows the MOGA logo, and its
-  Select / Start buttons are labelled − and +. The drawing keeps the MOGA's shape, with A / B /
-  X / Y where the MOGA has them (their letters are the Switch's: A still drifts).
+  the game's text tables in memory as the game reads them, one text at a time (the game shares
+  words such as "START" between texts; only the controller ones change); the OBB on your SD card
+  is not touched.
+- **New controller pictures on the controls pages.** The drawing of the MOGA gamepad is replaced
+  by two drawings of the port's own, in the game's style: a handheld console in handheld mode and
+  a gamepad when docked; the picture changes by itself when you dock or undock. The buttons are
+  where they are on the Switch: X on top, Y left, A right, B bottom, − and + at the top, L and R
+  on the shoulders. The pages' callout lines follow: on the game controls page the drift line
+  points at A and "Tap the + button to PAUSE" sits above the picture, pointing at +; on the menu
+  controls page everything moves down to make room for EASYDRIVE above the picture, the face
+  buttons' callouts show what each button does, and the callout for Origin (EA's online account,
+  not available offline) is gone.
 
 ### Fixed
 - **A rare crash of the game while loading into a race.** Found while testing 0.3.0 (it is in

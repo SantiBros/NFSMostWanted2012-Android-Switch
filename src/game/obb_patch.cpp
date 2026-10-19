@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <unordered_map>
 #include <vector>
@@ -76,21 +77,51 @@ std::string new_text(const std::string& key, const std::string& value) {
     return v;
 }
 
+// The menu controls page (Options > Controls) has a callout line for each face
+// button, placed for the MOGA's arrangement (Y top, X left, B right, A
+// bottom). The port's picture has the Switch's (X top, Y left, A right, B
+// bottom), so the texts at the ends of those lines trade places: the line to
+// the top button now says what X does, and so on.
+const std::pair<const char*, const char*> kSwapped[] = {
+    {"MOGA_CONTROLS_SHOP", "MOGA_CONTROLS_MOST_WANTED"},
+    {"MOGA_CONTROLS_BACK", "MOGA_CONTROLS_CONFIRM"},
+};
+
+// SBIN chunks: tag, size, FNV-1 hash, data.
+struct Chunk {
+    std::string tag, data;
+};
+// Each chunk starts at a multiple of 4 bytes (zero padding before it if
+// needed).
+bool split_chunks(const std::string& sbin, std::vector<Chunk>& chunks) {
+    if (sbin.size() < 8 || sbin.compare(0, 4, "SBIN") != 0) return false;
+    for (size_t p = 8; p + 12 <= sbin.size();) {
+        const u32 size = rd32(sbin, p + 4);
+        if (p + 12 + size > sbin.size()) return false;
+        chunks.push_back({sbin.substr(p, 4), sbin.substr(p + 12, size)});
+        p += 12 + size;
+        while (p % 4 && p < sbin.size() && sbin[p] == 0) p++;
+    }
+    return true;
+}
+std::string join_chunks(const std::string& sbin, const std::vector<Chunk>& chunks) {
+    std::string out = sbin.substr(0, 8);
+    for (const Chunk& c : chunks) {
+        while (out.size() % 4) out.push_back('\0');
+        out += c.tag;
+        put32(out, (u32)c.data.size());
+        put32(out, fnv1(c.data));
+        out += c.data;
+    }
+    return out;
+}
+
 }  // namespace
 
 std::string patch_string_table(const std::string& sbin, int* changed) {
     if (changed) *changed = 0;
-    if (sbin.size() < 8 || sbin.compare(0, 4, "SBIN") != 0) return sbin;
-    struct Chunk {
-        std::string tag, data;
-    };
     std::vector<Chunk> chunks;
-    for (size_t p = 8; p + 12 <= sbin.size();) {
-        const u32 size = rd32(sbin, p + 4);
-        if (p + 12 + size > sbin.size()) return sbin;
-        chunks.push_back({sbin.substr(p, 4), sbin.substr(p + 12, size)});
-        p += 12 + size;
-    }
+    if (!split_chunks(sbin, chunks)) return sbin;
     Chunk *chdr = nullptr, *cdat = nullptr, *data = nullptr;
     for (Chunk& c : chunks) {
         if (c.tag == "CHDR") chdr = &c;
@@ -106,35 +137,169 @@ std::string patch_string_table(const std::string& sbin, int* changed) {
         strs[i] = cdat->data.substr(off, len);
     }
     // StringPair records in DATA: string ids of the key and of the text,
-    // then 0xFFFFFFFF.
-    std::unordered_map<u32, std::string> key_of;  // text's string id -> key
+    // then 0xFFFFFFFF. Texts are shared: "START" is the text of UI_MOGA_START
+    // and of the race's HUD_INGAME_START, "CONFIRM" of a MOGA key and of the
+    // age gate's button. So a change never touches a shared string: the new
+    // text is added to the table and only that key's record points at it.
+    struct Record {
+        size_t at;
+        u16 key, text;
+    };
+    std::vector<Record> records;
+    std::unordered_map<std::string, std::string> text_of;  // key -> its original text
     for (size_t p = 0; p + 8 <= data->data.size(); p += 4) {
         if (rd32(data->data, p + 4) != 0xFFFFFFFFu) continue;
         const u16 k = rd16(data->data, p), v = rd16(data->data, p + 2);
-        if (k < n && v < n && is_key(strs[k]) && !key_of.count(v)) key_of[v] = strs[k];
+        if (k < n && v < n && is_key(strs[k])) {
+            records.push_back({p, k, v});
+            text_of.emplace(strs[k], strs[v]);
+        }
     }
+    std::unordered_map<std::string, std::string> swapped;  // key -> the text it shows now
+    for (const auto& [k1, k2] : kSwapped)
+        if (text_of.count(k1) && text_of.count(k2)) {
+            swapped[k1] = text_of[k2];
+            swapped[k2] = text_of[k1];
+        }
+    std::unordered_map<std::string, u16> added;  // new text -> its string id
+    u32 next_id = (u32)n;
     int count = 0;
-    for (auto& [v, key] : key_of) {
-        const std::string text = new_text(key, strs[v]);
-        if (text == strs[v]) continue;
-        // The new text goes to the end of the string data; the old one stays
-        // where it is, unused.
-        wr32(chdr->data, v * 8, (u32)cdat->data.size());
-        wr32(chdr->data, v * 8 + 4, (u32)text.size());
-        cdat->data += text;
-        cdat->data.push_back('\0');
+    for (const Record& r : records) {
+        const std::string& key = strs[r.key];
+        const auto sw = swapped.find(key);
+        const std::string text = sw != swapped.end() ? sw->second : new_text(key, strs[r.text]);
+        if (text == strs[r.text]) continue;
+        auto it = added.find(text);
+        if (it == added.end()) {
+            if (next_id > 0xFFFF) break;  // string ids are 16-bit
+            put32(chdr->data, (u32)cdat->data.size());
+            put32(chdr->data, (u32)text.size());
+            cdat->data += text;
+            cdat->data.push_back('\0');
+            it = added.emplace(text, (u16)next_id++).first;
+        }
+        wr16(data->data, r.at + 2, it->second);
         count++;
+        static const bool dump = std::getenv("NFSMW_OBB_PATCH_DUMP") != nullptr;  // debugging: every change
+        if (dump) LOGD("OBB text: %s: \"%s\" -> \"%s\"", key.c_str(), strs[r.text].c_str(), text.c_str());
     }
     if (changed) *changed = count;
     if (!count) return sbin;
-    std::string out = sbin.substr(0, 8);
-    for (const Chunk& c : chunks) {
-        out += c.tag;
-        put32(out, (u32)c.data.size());
-        put32(out, fnv1(c.data));
-        out += c.data;
+    return join_chunks(sbin, chunks);
+}
+
+namespace {
+
+// One field of one object in the layouts file's DATA chunk: the object's
+// index (its place in OHDR), the byte offset in the object, the size (2 or 4)
+// and the value it has in 1.3.128 and the new one. Floats as their bits.
+struct Edit {
+    u32 object, offset, size, from, to;
+};
+u32 bits(float f) {
+    u32 b;
+    std::memcpy(&b, &f, 4);
+    return b;
+}
+// Entities: type (u16), entity id (u16 + 2), then the rectangle: top-left x,
+// y, anchor x, anchor y, bottom-right x, y, anchor x, anchor y (floats; layout
+// units around the page's centre).
+constexpr u32 kTlX = 6, kTlY = 10, kBrX = 22, kBrY = 26;
+void move_rect(std::vector<Edit>& e, u32 obj, float x0, float y0, float x1, float y1, float nx0, float ny0,
+               float nx1, float ny1) {
+    e.push_back({obj, kTlX, 4, bits(x0), bits(nx0)});
+    e.push_back({obj, kTlY, 4, bits(y0), bits(ny0)});
+    e.push_back({obj, kBrX, 4, bits(x1), bits(nx1)});
+    e.push_back({obj, kBrY, 4, bits(y1), bits(ny1)});
+}
+void shift_y(std::vector<Edit>& e, u32 obj, float x0, float y0, float x1, float y1, float dy) {
+    move_rect(e, obj, x0, y0, x1, y1, x0, y0 + dy, x1, y1 + dy);
+}
+
+// The changes to the two controller pages, so that every callout line ends on
+// its button in the port's picture (game/controller_art.h): the Switch's
+// arrangement, with - and + at the top.
+std::vector<Edit> layout_edits() {
+    std::vector<Edit> e;
+    constexpr u32 kHalignCentre = 1, kHalignRight = 2;
+    constexpr u32 kGuideLeft = 1438, kGuideLeft2 = 1441;  // string ids: options_help_guide_left / _left2
+    // Game controls page (options_help_moga_game).
+    // Drift: the line ends on A, now right of the cluster.
+    move_rect(e, 14723, 70, -6, 203, 14, 95.5f, -6, 203, 14);
+    // Pause: "Tap the + button to" and PAUSE above the picture, its line down
+    // to + at the top (a line that ends at its lower right).
+    move_rect(e, 14705, -203, 74, -52, 94, -35, -53.1f, 27.3f, -33.1f);
+    e.push_back({14706, 2, 2, kGuideLeft2, kGuideLeft});
+    move_rect(e, 14668, -226, 53, -144, 88, -54, -80, 34, -70);
+    e.push_back({14669, 2, 4, kHalignRight, kHalignCentre});
+    move_rect(e, 14663, -145, 96, -145, 96, -10, -67, -10, -67);
+    e.push_back({14664, 2, 4, kHalignRight, kHalignCentre});
+    // Menu controls page (options_help_moga_menu): everything 20 units lower,
+    // where the game controls page has its picture, so that there is room
+    // above it.
+    shift_y(e, 14752, -141, -79, 142, 89, 20);   // the picture
+    shift_y(e, 14762, 158, -75, 215, -55, 20);   // MENU (right)
+    shift_y(e, 14772, 142, -49, 203, -30, 20);   // SHOP (the top button's line)
+    shift_y(e, 14777, -170, -75, -170, -75, 20); // MENU (left)
+    shift_y(e, 14782, 54, 95, 54, 94, 20);       // MOST WANTED
+    shift_y(e, 14787, 142, 94, 142, 94, 20);     // CONFIRM
+    shift_y(e, 14792, -133, -39, -133, -39, 20); // NAVIGATION
+    shift_y(e, 14797, 147, 18, 208, 37, 20);     // BACK
+    shift_y(e, 14802, -217, -81, -58, -61, 20);  // their lines
+    shift_y(e, 14808, -228, -47, -74, -27, 20);
+    shift_y(e, 14814, -12, 31, 87, 51, 20);
+    shift_y(e, 14832, 55, -83, 206, -63, 20);
+    shift_y(e, 14838, 70, -55, 203, -35, 20);
+    shift_y(e, 14844, 47, 38, 132, 58, 20);
+    shift_y(e, 14850, 90, -5, 207, 15, 20);
+    // ORIGIN (- , the EA Origin account: offline in the port): off the page.
+    move_rect(e, 14767, -161, 43, -161, 43, -4000, 43, -4000, 43);
+    move_rect(e, 14820, -214, 21, -52, 41, -4000, 21, -3900, 41);
+    // EASYDRIVE (+): above the picture, its line down to +, as on the game page.
+    move_rect(e, 14826, -214, 53, -52, 73, -35, -53.1f, 27.3f, -33.1f);
+    e.push_back({14827, 2, 2, kGuideLeft2, kGuideLeft});
+    move_rect(e, 14757, -129, 76, -129, 76, -12, -66, -12, -66);
+    e.push_back({14758, 2, 4, kHalignRight, kHalignCentre});
+    return e;
+}
+
+}  // namespace
+
+std::string patch_layouts(const std::string& sbin, int* changed) {
+    if (changed) *changed = 0;
+    std::vector<Chunk> chunks;
+    if (!split_chunks(sbin, chunks)) return sbin;
+    Chunk *data = nullptr, *ohdr = nullptr;
+    for (Chunk& c : chunks) {
+        if (c.tag == "DATA") data = &c;
+        if (c.tag == "OHDR") ohdr = &c;
     }
-    return out;
+    if (!data || !ohdr) return sbin;
+    // OHDR: each object's start in DATA, in bits.
+    const std::vector<Edit> edits = layout_edits();
+    auto where = [&](const Edit& ed, size_t& at) {
+        if ((u64)ed.object * 4 + 4 > ohdr->data.size()) return false;
+        at = rd32(ohdr->data, ed.object * 4) / 8 + ed.offset;
+        return at + ed.size <= data->data.size();
+    };
+    for (const Edit& ed : edits) {  // all or nothing: a different file stays as it is
+        size_t at = 0;
+        if (!where(ed, at)) return sbin;
+        const u32 now = ed.size == 2 ? rd16(data->data, at) : rd32(data->data, at);
+        if (now != ed.from) {
+            LOGW("OBB: the controls pages' layout is not the one the port knows (object %u); left as it is",
+                 ed.object);
+            return sbin;
+        }
+    }
+    for (const Edit& ed : edits) {
+        size_t at = 0;
+        where(ed, at);
+        if (ed.size == 2) wr16(data->data, at, (u16)ed.to);
+        else wr32(data->data, at, ed.to);
+    }
+    if (changed) *changed = 1;
+    return join_chunks(sbin, chunks);
 }
 
 namespace {
@@ -169,14 +334,16 @@ std::string build_tail(const std::string& path) {
         std::string cd;
         if ((u64)cd_off + cd_size > size || !read_at(f, cd_off, cd_size, cd)) break;
         std::string entries;  // the changed entries (local header + data)
-        int files = 0, texts = 0;
+        int files = 0, texts = 0, tables = 0, layout_lines = 0;
         for (size_t p = 0; p + 46 <= cd.size() && rd32(cd, p) == 0x02014B50u;) {
             const u16 method = rd16(cd, p + 10), nlen = rd16(cd, p + 28), xlen = rd16(cd, p + 30), clen = rd16(cd, p + 32);
             const u32 csize = rd32(cd, p + 20), usize = rd32(cd, p + 24), local = rd32(cd, p + 42);
             const std::string name = cd.substr(p + 46, nlen);
             const size_t next = p + 46 + nlen + xlen + clen;
-            if (name.rfind("published/stringdata/", 0) == 0 && name.find("/nfsmw_android.sb") != std::string::npos &&
-                (method == 0 || method == 8) && usize < (16u << 20)) {
+            const bool strings =
+                name.rfind("published/stringdata/", 0) == 0 && name.find("/nfsmw_android.sb") != std::string::npos;
+            const bool layouts = name == "published/layouts/layouts.sb";
+            if ((strings || layouts) && (method == 0 || method == 8) && usize < (16u << 20)) {
                 std::string lh, comp;
                 if (read_at(f, local, 30, lh) && rd32(lh, 0) == 0x04034B50u &&
                     read_at(f, (u64)local + 30 + rd16(lh, 26) + rd16(lh, 28), csize, comp)) {
@@ -187,7 +354,9 @@ std::string build_tail(const std::string& path) {
                         if (!setup::inflate_raw(comp.data(), comp.size(), plain.data(), plain.size())) plain.clear();
                     }
                     int n = 0;
-                    const std::string patched = plain.empty() ? plain : patch_string_table(plain, &n);
+                    const std::string patched = plain.empty() ? plain
+                                                : strings     ? patch_string_table(plain, &n)
+                                                              : patch_layouts(plain, &n);
                     if (n > 0) {
                         const u32 crc = checksum::crc32(0, patched.data(), patched.size());
                         const u32 at = (u32)(size + entries.size());
@@ -209,7 +378,8 @@ std::string build_tail(const std::string& path) {
                         wr32(cd, p + 24, (u32)patched.size());
                         wr32(cd, p + 42, at);
                         files++;
-                        texts += n;
+                        if (strings) texts += n, tables++;
+                        else layout_lines += n;
                     }
                 }
             }
@@ -220,9 +390,9 @@ std::string build_tail(const std::string& path) {
         wr32(eocd, 12, (u32)cd.size());
         wr32(eocd, 16, (u32)(size + entries.size()));
         tail = entries + cd + eocd;
-        LOGI("OBB: %d string tables with %d texts changed for the Switch (MOGA -> Switch), %zu KiB added in memory, "
-             "%.0f ms",
-             files, texts, tail.size() / 1024,
+        LOGI("OBB: %d string tables with %d texts changed for the Switch (MOGA -> Switch), controller pages' layout "
+             "%s, %zu KiB added in memory, %.0f ms",
+             tables, texts, layout_lines ? "changed" : "left as it is", tail.size() / 1024,
              std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
     } while (false);
     std::fclose(f);

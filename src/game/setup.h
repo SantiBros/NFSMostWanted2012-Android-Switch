@@ -13,6 +13,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "core/common.h"
 
@@ -35,5 +36,7 @@ LibraryCheck check_library(const std::string& name, u64 size, u32 crc, u32* reco
 // Unpack a zip "deflate" stream (no zlib header) of known size; false if it
 // does not unpack to exactly out_len bytes.
 bool inflate_raw(const void* in, size_t in_len, void* out, size_t out_len);
+// Decode a PNG file in memory into 8-bit RGBA, top row first.
+bool decode_png(const void* png, size_t len, std::vector<u8>& rgba, int& width, int& height);
 
 }  // namespace game::setup

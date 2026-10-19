@@ -581,6 +581,7 @@ void m_glDeleteTextures(s32 n, u32 ids) {
     for (s32 i = 0; i < n; i++) {
         u32 id = mem::r32(ids + i * 4);
         scene::g_tex.erase(id);
+        game::controller_art::forget_texture(id);
         for (u32& b : scene::g_bound_tex)
             if (b == id) b = 0;
         for (u32& b : g_bound_cube)
@@ -656,7 +657,7 @@ void m_glTexImage2D(u32 target, s32 level, s32 ifmt, s32 w, s32 h, s32 border, u
     }
     // The controls page's picture of the controller (game/controller_art.h).
     if (target == GL_TEXTURE_2D && level == 0 && px && fmt == GL_RGBA && type == GL_UNSIGNED_BYTE && w >= 1000)
-        game::controller_art::patch_texture(mem::ptr<u8>(px), w, h);
+        game::controller_art::patch_texture(mem::ptr<u8>(px), w, h, scene::g_bound_tex[scene::g_unit]);
     struct Args {
         GLenum target;
         GLint level, ifmt;
@@ -1071,6 +1072,20 @@ void gl_set_output_size(int w, int h) {
     if (scene::g_screen_w > 0) scene::set_output((float)w / (float)scene::g_screen_w);
 }
 float gl_output_scale() { return scene::g_out; }
+void gl_update_texture(u32 texture, int x, int y, int w, int h, const u8* rgba) {
+    static auto bind = (void (*)(GLenum, GLuint))gl_proc("glBindTexture");
+    static auto sub = (void (*)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*))gl_proc(
+        "glTexSubImage2D");
+    struct Args {
+        GLint x, y;
+        GLsizei w, h;
+    };
+    glq::call(bind, GL_TEXTURE_2D, texture);
+    glq::call_data<Args>([](const Args& a, const void* d) { sub(GL_TEXTURE_2D, 0, a.x, a.y, a.w, a.h, GL_RGBA,
+                                                                GL_UNSIGNED_BYTE, d); },
+                         Args{x, y, w, h}, rgba, (size_t)w * h * 4);
+    glq::call(bind, GL_TEXTURE_2D, scene::g_bound_tex[scene::g_unit]);
+}
 float gl_scene_scale() { return scene::g_scale; }
 bool gl_scene_scaled_targets() {
     for (auto& [id, t] : scene::g_tex)

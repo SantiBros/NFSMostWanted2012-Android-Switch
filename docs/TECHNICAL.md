@@ -77,7 +77,7 @@ Tested on the desktop build with the original 1.3.128 APK and OBB:
 | GL calls on their own thread, redundant GL calls dropped | working on desktop (rendering checked against the unthreaded path) |
 | Direct guest-memory access in the Switch JIT | working in the ARM64 build under qemu; not yet tried on a console |
 | Docking / undocking while playing: the resolution follows (0.3.0) | working on desktop with simulated mode changes, both ways; not yet tried on a console |
-| Switch button names in the texts (11 languages) and the controls picture (0.3.0) | working on desktop, with every texture pack size the Switch uses (720p and 1080p starts) |
+| Switch button names in the texts (11 languages), the controller pictures and their callout lines (0.3.0) | working on desktop on both controls pages, with every texture pack size the Switch uses (720p and 1080p starts), and with the picture changing while the page is open |
 | Random crash at start-up (a bug in the game's texture loading) | fixed in the loader (`src/game/fixes.cpp`) |
 | Rare crash loading into a race (a timing function reaching a missing object) | guarded in the loader (`src/game/fixes.cpp`) |
 | Rare crash loading into a race (the per-frame value store reaching a missing slot, 0.3.0) | guarded in the loader (`src/game/fixes.cpp`); the guard checked by calling the function with a slot taken away (`NFSMW_TEST_SLOT_NULL=1`) |
@@ -329,33 +329,56 @@ mode changes (for example `600:1920x1080,1800:1280x720`).
 
 The game was made for touch screens and the MOGA gamepad, and the port hands it a MOGA Pro (see
 `src/hle/jni/`). Its controls page (pause > CONTROLS, or *Options > Controls*) and its tutorials
-therefore said "MOGA", "Start" and "Select". Since 0.3.0 they name the Switch's buttons:
+therefore said "MOGA", "Start" and "Select", next to a drawing of the MOGA. Since 0.3.0 they show
+the Switch's buttons:
 
 - **Texts** (`src/game/obb_patch.cpp`). The game measures and draws its text one glyph at a time
   through the Java `BitmapGraphics` class, so the texts have to change at their source: the string
   tables `published/stringdata/<language>/nfsmw_android.sb` in the OBB (EA's chunked SBIN format:
   a string table in `CHDR`/`CDAT`, and `StringPair` records in `DATA` that tie each key to its
-  text). At start-up a background thread reads the 11 tables (one per language), changes the
+  text). At start-up a background thread reads the 11 tables (one per language) and changes the
   texts (`UI_MOGA_START` and `UI_MOGA_SELECT` become + and −, "Start" in the pause tutorial becomes
-  +, "MOGA" becomes "Switch", or "SWITCH" in titles in capitals: 119 texts in all), appends each new
-  text to the table, points its entry at it and recomputes the chunks' FNV-1 checksums. The OBB
+  +, "MOGA" becomes "Switch", or "SWITCH" in titles in capitals; on the menu controls page
+  `MOGA_CONTROLS_SHOP` / `_MOST_WANTED` and `_BACK` / `_CONFIRM` trade texts, see below: 187 in
+  all). Texts are shared between keys ("START" is also the race's `HUD_INGAME_START`, "CONFIRM"
+  the age gate's button), so a shared text is never edited: each new text is added to the table
+  and only that key's `StringPair` points at it. Then the chunks' FNV-1 checksums are recomputed
+  (chunks start at multiples of 4 bytes). The OBB
   on the SD card is never written to. The changed tables go into an in-memory tail that the OBB
   cache (`src/hle/file_cache.cpp`, `set_tail`) shows the game after the real end of the file:
   the tables, stored uncompressed, then a copy of the zip's central directory that points at
   them, and a new end record. The game opens the OBB as a zip, finds the new directory at the
   new end and reads the new tables; everything else still comes from the card. About 1.2 MiB
-  of memory, a few milliseconds on a background thread, before the game opens the OBB.
-- **The picture** (`src/game/controller_art.cpp`). The controller drawn on that page,
+  of memory with the layouts below, a few tens of milliseconds on a background thread, before the
+  game opens the OBB.
+- **The pictures** (`src/game/controller_art.cpp`). The drawing on those pages,
   `hud/MogaController.tif`, sits in RGBA texture atlases in the in-game and menu texture packs
   (`published.{1x,2x,4x}/texturepacks_ui/{in_game,menu}.sba`, the same 628 × 431 picture in all
-  six). The packs' `Box` records give each picture's place in its atlas; the atlases are stored
-  bottom-up. When the game uploads one of those atlases (`glTexImage2D`), the port checks the
-  atlas's size and a checksum of the parts it changes, and if they match, removes the MOGA logo
-  (the panel and its dividers are plain vertical bands, so a clean row is copied over it) and
-  replaces SELECT / START with a − and a + in the labels' white. Nothing else in the drawing
-  changes: it keeps the MOGA's shape, with A / B / X / Y where the MOGA has them.
+  six; the menu packs store premultiplied alpha). The packs' `Box` records give each picture's
+  place in its atlas; the atlases are stored bottom-up. When the game uploads one of those
+  atlases (`glTexImage2D`), the port checks the atlas's size and a checksum of parts of the
+  MOGA drawing, and if they match, writes one of its own two drawings in its place: a handheld
+  console in handheld mode, a gamepad when docked. The port remembers those textures (and
+  forgets them when the game deletes them); when the console is docked or undocked, it uploads
+  the other drawing into them (`glTexSubImage2D`). The drawings are original, made from code in
+  the game's colours by `tools/make_controller_art.py` and stored as PNG files in
+  `src/game/controller_art_images.inc`. They have the Switch's button arrangement (X top, Y
+  left, A right, B bottom, − and + at the top), with each element where a callout line points.
+  The game draws the picture squashed to 0.866 of its height on a 16:9 screen, so the drawings
+  are made in that space and stretched back.
+- **The callout lines** (`published/layouts/layouts.sb`, the same SBIN format: `Entity` records
+  with a rectangle in layout units around the page's centre, a rotation and a content such as a
+  `Text` or a `SubLayout`; each line is a sublayout, `options_help_guide_left`/`_left2`/`_right`/
+  `_right2`, made of a stretched straight piece and a fixed 40 × 20 bend whose end is a corner of
+  the rectangle). The port moves 23 entries of the two pages, checking every old value first:
+  on the game page the drift line ends on A, and the pause callout moves above the picture with a
+  line down to +; on the menu page everything moves 20 units down (as on the game page), the
+  EASYDRIVE callout moves above the picture with a line down to +, the Origin callout (EA's
+  online account) moves off the page, and the face buttons' lines keep their places while their
+  texts trade (the line to the top button now says what X does, and so on).
 
-Both can be turned off for comparisons: `NFSMW_NO_OBB_PATCH=1` and `NFSMW_NO_ART_PATCH=1`.
+Both can be turned off for comparisons: `NFSMW_NO_OBB_PATCH=1` (texts and lines) and
+`NFSMW_NO_ART_PATCH=1` (pictures). `NFSMW_OBB_PATCH_DUMP=1` logs every text changed.
 
 ## Controller support in the menus
 
@@ -539,6 +562,7 @@ tools/
   prepare_sd.py     fills the port's game/ folder from a player's APK and OBB
   make_release.py   packs the port, prepare_sd.py and the source into one release zip
   gen_gles.py       GLES thunk generator;  profile.py  sampling-profile report
+  make_controller_art.py  draws the controls pages' pictures (src/game/controller_art_images.inc)
   fetch_deps.sh     fetches the third-party sources in external/
 res/
   icon.jpg                  the port's own Homebrew Menu icon (256x256)

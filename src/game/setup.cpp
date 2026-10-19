@@ -480,6 +480,16 @@ bool inflate_raw(const void* in, size_t in_len, void* out, size_t out_len) {
                                             (int)in_len) == (int)out_len;
 }
 
+bool decode_png(const void* png, size_t len, std::vector<u8>& rgba, int& width, int& height) {
+    if (len > 0x7FFFFFFF) return false;
+    int n = 0;
+    stbi_uc* px = stbi_load_from_memory(static_cast<const stbi_uc*>(png), (int)len, &width, &height, &n, 4);
+    if (!px) return false;
+    rgba.assign(px, px + (size_t)width * height * 4);
+    stbi_image_free(px);
+    return true;
+}
+
 LibraryCheck check_library(const std::string& name, u64 size, u32 crc, u32* recorded_crc) {
     for (const TestedLib& t : kTested)
         if (name == t.name && size == t.size && crc == t.crc) return LibraryCheck::Tested;

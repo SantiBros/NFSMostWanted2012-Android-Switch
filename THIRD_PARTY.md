@@ -37,6 +37,10 @@ libnx, Mesa, libdrm_nouveau, newlib and the GCC runtime come from
 - The banner, the social preview and the port's icon (`res/icon.jpg`, `docs/images/`) use the font
   [Barlow Condensed](https://github.com/jpt/barlow) by Jeremy Tribby, under the SIL Open Font
   License 1.1. The font itself is not included.
+- The controller drawings for the game's controls pages (`src/game/controller_art_images.inc`,
+  drawn by `tools/make_controller_art.py`) are the port's own, under the MIT License; their button
+  letters were drawn with [Poppins](https://github.com/itfoundry/Poppins) by the Indian Type
+  Foundry, under the SIL Open Font License 1.1. The font itself is not included.
 - The screenshots in `docs/images/` show the game running in the port, to illustrate it. The game,
   its graphics and its brands belong to Electronic Arts Inc.
 

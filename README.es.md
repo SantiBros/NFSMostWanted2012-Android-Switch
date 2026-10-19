@@ -74,9 +74,10 @@ propio juego para manejar con control.</sub>
   ejecutar código de 64 bits ([por qué](#preguntas-frecuentes)).
 - **720p en modo portátil, 1080p en el dock, y puedes conectar o sacar la consola del dock mientras
   juegas.**
-- **Los botones de la Switch en el juego.** La página de controles y los tutoriales nombran los
-  botones de la Switch en vez del control MOGA para el que se hizo el juego, en los 11 idiomas, y el
-  dibujo del control ya no tiene el logo de MOGA.
+- **Los botones de la Switch en el juego.** Las páginas de controles y los tutoriales nombran los
+  botones de la Switch en vez del control MOGA para el que se hizo el juego, en los 11 idiomas. Las
+  páginas de controles muestran dibujos propios del port con la distribución de botones de la
+  Switch: una consola portátil en modo portátil y un control cuando está en el dock.
 - **Soporte completo de control.** Maneja con las palancas y los botones, y usa todos los menús con
   un resaltado que mueves con la cruceta, dibujado al estilo del juego. La pantalla táctil sigue
   funcionando.
@@ -169,8 +170,8 @@ progreso se mueven solos.
 ## Controles
 
 **Manejo**: el port le presenta al juego un control MOGA Pro, que soporta de forma nativa. Desde la
-0.3.0 la página de controles y los tutoriales del juego nombran los botones de la Switch (+ y − en vez
-de Start y Select).
+0.3.0 las páginas de controles y los tutoriales del juego muestran los botones de la Switch (+ y − en
+vez de Start y Select).
 
 | Switch | Juego |
 |---|---|
@@ -219,9 +220,6 @@ recta; unos 30° de inclinación es el giro máximo. Todos los botones siguen fu
 **Problemas conocidos**
 - La primerísima versión de prueba congeló una consola una vez (no se sabe la causa; las versiones
   siguientes no lo han hecho en las pruebas hasta ahora).
-- El control dibujado en la página de controles sigue teniendo la forma del MOGA: sus botones
-  frontales están donde los tiene el MOGA (la A abajo), aunque sus letras son las de la Switch (la A
-  derrapa).
 
 En el [registro de cambios](CHANGELOG.md) (en inglés) está lo que cambió en cada versión.
 

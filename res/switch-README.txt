@@ -242,8 +242,10 @@ WHAT'S NEW
   * The game's controls page and tutorials name the Switch's buttons, in
     all 11 languages: "Switch" instead of "MOGA", + and - instead of Start
     and Select. The OBB on the SD card is not changed (it happens in memory).
-  * The controller picture on the controls page no longer shows the MOGA
-    logo, and its Select / Start buttons are labelled - and +.
+  * New controller pictures on the controls pages, with the Switch's button
+    layout: a handheld console in handheld mode, a gamepad when docked
+    (it changes when you dock or undock). The pages' lines point at the
+    right buttons.
   * Fixed: a rare crash of the game while loading into a race.
   * The documents now say plainly how the port works: the game's 32-bit
     code goes through a CPU recompiler (the part that works like an

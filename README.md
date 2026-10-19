@@ -70,9 +70,10 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
   ARM code goes through a CPU recompiler ([Dynarmic](https://github.com/azahar-emu/dynarmic)), because
   Switch homebrew can only run 64-bit code ([why](#faq)).
 - **720p in handheld mode, 1080p docked, and you can dock or undock while you play.**
-- **Switch buttons in the game.** The controls page and tutorials name the Switch's buttons instead
-  of the MOGA gamepad the game was made for, in all 11 languages, and the controller picture has
-  no MOGA logo.
+- **Switch buttons in the game.** The controls pages and tutorials name the Switch's buttons instead
+  of the MOGA gamepad the game was made for, in all 11 languages. The controls pages show the
+  port's own drawings with the Switch's button layout: a handheld console in handheld mode, a
+  gamepad when docked.
 - **Full controller support.** Drive with the sticks and buttons, and play every menu with a
   highlight you move with the D-pad, drawn in the game's own style. The touch screen still works.
 - **Optional gyro steering.** Tilt the console or the controller like a steering wheel.
@@ -159,7 +160,7 @@ progress are moved over automatically.
 ## Controls
 
 **Driving**: the port hands the game a MOGA Pro gamepad, which it supports natively. Since 0.3.0 the
-game's controls page and tutorials name the Switch's buttons (+ and − instead of Start and Select).
+game's controls pages and tutorials show the Switch's buttons (+ and − instead of Start and Select).
 
 | Switch | Game |
 |---|---|
@@ -207,8 +208,6 @@ straight; about 30° of tilt is full lock. All buttons keep working.<br>
 **Known issues**
 - The very first test build froze a console once (the cause is not known; later builds have not
   done it in testing so far).
-- The controller drawn on the controls page is still the MOGA gamepad's shape: its face buttons sit
-  where the MOGA has them (A at the bottom), though their letters are the Switch's (A drifts).
 
 See the [changelog](CHANGELOG.md) for what changed in each version.
 

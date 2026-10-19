@@ -60,6 +60,10 @@ void gl_set_scene_scale(float s);
 // while playing): everything the game draws is scaled to it.
 void gl_set_output_size(int w, int h);
 float gl_output_scale();  // real screen / game screen (1 = the size the game started with)
+// Replace part of a texture with RGBA pixels (bottom row first, as GL reads
+// them); the texture bound before stays bound. Copies the pixels; call from
+// the thread that issues the game's GL calls.
+void gl_update_texture(u32 texture, int x, int y, int w, int h, const u8* rgba);
 float gl_scene_scale();
 bool gl_scene_scaled_targets();  // the game has drawn into a scaled target
 

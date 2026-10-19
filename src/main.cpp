@@ -19,6 +19,7 @@
 #include "core/memory.h"
 #include "game/audio.h"
 #include "game/config.h"
+#include "game/controller_art.h"
 #include "game/fixes.h"
 #include "game/input.h"
 #include "game/debug_menu.h"
@@ -197,6 +198,7 @@ int main(int argc, char** argv) {
             fatal("%s is not a valid OBB: it must be the original file (a zip archive), not extracted or converted",
                   game::paths::display(obb).c_str());
         game::obb_patch::start(obb);  // texts that say "Switch" instead of "MOGA" (in memory, in the background)
+        game::controller_art::prepare();  // the controls pages' pictures, decoded in the background
     }
     crash::test_point("libs");
     elf::relocate_all();
@@ -288,6 +290,9 @@ int main(int argc, char** argv) {
     // the game draws is scaled to it (hle::gl_set_output_size), so the game
     // renders at the new resolution without knowing it.
     int mode_w = S.width, mode_h = S.height;
+    // The controls page's picture: a handheld console in handheld mode, a
+    // gamepad when docked (1080p).
+    game::controller_art::set_handheld(mode_h < 1080);
     int prof_frames = 0;
     double prof_tick = 0, prof_cpu = 0;
     for (int frame = 1; S.max_frames == 0 || frame <= S.max_frames; frame++) {
@@ -300,6 +305,7 @@ int main(int argc, char** argv) {
             int want_w = S.width, want_h = S.height;
             platform::preferred_display_size(want_w, want_h);
             if (want_w != mode_w || want_h != mode_h) {
+                game::controller_art::set_handheld(want_h < 1080);
                 const auto t0 = std::chrono::steady_clock::now();
                 bool ok = false;
                 hle::glq::sync([&] { ok = platform::gl_resize(want_w, want_h); });

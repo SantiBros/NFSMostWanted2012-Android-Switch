@@ -60,7 +60,9 @@ and `NFSMW_UNSAFE_FP=1` (x86 only: skip exact ARM floating-point emulation).
 own debug AI driver, so races drive themselves during automated tests.
 `NFSMW_TEST_DOCK="600:1920x1080,1800:1280x720"` changes the display size at those frames, as
 docking and undocking do. `NFSMW_NO_OBB_PATCH=1` and `NFSMW_NO_ART_PATCH=1` leave the game's texts
-and controls picture as they are (MOGA). `NFSMW_TEST_SLOT_NULL=1` checks the 0.3.0 game fix for
+and layouts, and its controls picture, as they are (MOGA); `NFSMW_OBB_PATCH_DUMP=1` logs every text
+changed. The controls pages' pictures are drawn by `tools/make_controller_art.py` (Pillow), which
+writes `src/game/controller_art_images.inc`; `--preview DIR` also saves them as PNG files. `NFSMW_TEST_SLOT_NULL=1` checks the 0.3.0 game fix for
 the per-frame value store: about 900 frames in, it calls that function with a slot taken away
 (with `NFSMW_NO_SLOT_FIX=1` as well, the game crashes there, as it did before the fix).
 `-DNFSMW_SWITCH_TEST=ON` builds with the Switch memory/JIT model. The ARM64 cross build
