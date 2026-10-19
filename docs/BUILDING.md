@@ -107,8 +107,16 @@ the "What's new" section.
 Players copy `switch/` onto the root of the SD card and put their APK and OBB into `game/`; the
 port sets itself up at the first start (`prepare_sd.py` is optional).
 
-Then create a GitHub release with the tag `v<version>`, attach the zip from `dist/`, and paste the
-version's entry from [CHANGELOG.md](../CHANGELOG.md) as the release notes.
+Then create a GitHub release with the tag `v<version>` and attach the zip and the symbols file.
+The release notes (English, then Spanish) follow the same order every time:
+
+1. One line on what the version brings, then the "No game files are included" box.
+2. **"Which file do I download?" / "¿Qué archivo descargo?"**, a table: the zip is the only file
+   players need; the `-symbols.elf` is for developers (crash reports); "Source code" is added by
+   GitHub and has nothing to play with.
+3. What's new (from [CHANGELOG.md](../CHANGELOG.md), in players' words), how to install, updating
+   from the previous version, known issues.
+4. At the end, the `.nro`'s SHA-256 (as `make_release.py` prints it).
 
 ## Third-party code
 
