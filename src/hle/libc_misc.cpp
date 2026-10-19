@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <ctime>
 #include <map>
 #include <mutex>
@@ -23,7 +24,40 @@ using mem::ptr;
 using mem::str;
 
 // ---- time -------------------------------------------------------------------
+// Desktop recording aid: NFSMW_RECORD_FPS=<n> gives the game a clock that
+// advances by exactly 1/n s per frame (hle::record_clock_frame), so that
+// frames captured one by one play back smoothly at n fps whatever the PC's
+// speed. Not in the Switch build.
+#if !defined(__SWITCH__)
+const long long g_record_step_ns = [] {
+    const char* e = std::getenv("NFSMW_RECORD_FPS");
+    return e && std::atoi(e) > 0 ? 1000000000ll / std::atoi(e) : 0ll;
+}();
+std::atomic<long long> g_record_ns{0};
+struct timespec g_record_base_mono, g_record_base_real;
+const bool g_record_init = [] {
+    ::clock_gettime(CLOCK_MONOTONIC, &g_record_base_mono);
+    ::clock_gettime(CLOCK_REALTIME, &g_record_base_real);
+    return true;
+}();
+struct timespec record_time(const struct timespec& base) {
+    const long long ns = (long long)base.tv_nsec + g_record_ns.load(std::memory_order_relaxed);
+    struct timespec t;
+    t.tv_sec = base.tv_sec + (time_t)(ns / 1000000000ll);
+    t.tv_nsec = (long)(ns % 1000000000ll);
+    return t;
+}
+#else
+constexpr long long g_record_step_ns = 0;
+#endif
 s32 h_time(u32 t) {
+#if !defined(__SWITCH__)
+    if (g_record_step_ns) {
+        s32 now = (s32)record_time(g_record_base_real).tv_sec;
+        if (t) mem::w32(t, (u32)now);
+        return now;
+    }
+#endif
     s32 now = (s32)std::time(nullptr);
     if (t) mem::w32(t, (u32)now);
     return now;
@@ -31,6 +65,12 @@ s32 h_time(u32 t) {
 int h_gettimeofday(u32 tv, u32 tz) {
     struct timeval h;
     ::gettimeofday(&h, nullptr);
+#if !defined(__SWITCH__)
+    if (g_record_step_ns) {
+        const struct timespec r = record_time(g_record_base_real);
+        h.tv_sec = r.tv_sec, h.tv_usec = r.tv_nsec / 1000;
+    }
+#endif
     if (tv) {
         mem::w32(tv, (u32)h.tv_sec);
         mem::w32(tv + 4, (u32)h.tv_usec);
@@ -47,6 +87,9 @@ int h_clock_gettime(int clk, u32 ts) {
         LOGI("clock_gettime: game uses clock id %d (lr %s)", clk, elf::describe(cpu::current().regs()[14]).c_str());
     struct timespec h;
     if (::clock_gettime(clk, &h) < 0) ::clock_gettime(CLOCK_MONOTONIC, &h);
+#if !defined(__SWITCH__)
+    if (g_record_step_ns) h = record_time(clk == CLOCK_REALTIME ? g_record_base_real : g_record_base_mono);
+#endif
     mem::w32(ts, (u32)h.tv_sec);
     mem::w32(ts + 4, (u32)h.tv_nsec);
     return 0;
@@ -544,6 +587,12 @@ void register_libc_misc() {
     // setjmp family lives in the ARM runtime blob
     for (const char* n : {"setjmp", "_setjmp", "sigsetjmp"}) thunks::add_data(n, mem::RT_SETJMP);
     for (const char* n : {"longjmp", "_longjmp", "siglongjmp"}) thunks::add_data(n, mem::RT_LONGJMP);
+}
+
+void record_clock_frame() {
+#if !defined(__SWITCH__)
+    if (g_record_step_ns) g_record_ns.fetch_add(g_record_step_ns, std::memory_order_relaxed);
+#endif
 }
 
 }  // namespace hle

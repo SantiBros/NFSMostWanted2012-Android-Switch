@@ -260,6 +260,12 @@ std::vector<Edit> layout_edits() {
     e.push_back({14827, 2, 2, kGuideLeft2, kGuideLeft});
     move_rect(e, 14757, -129, 76, -129, 76, -12, -66, -12, -66);
     e.push_back({14758, 2, 4, kHalignRight, kHalignCentre});
+    // The map's EasyDrive button: its label, now "+" instead of "START", in
+    // the larger font and moved right, to the middle of the round button
+    // ("START" filled it from its left edge).
+    constexpr u32 kFontBlack8 = 321, kFontBlack12 = 146;  // string ids: mw_black_8 / _12
+    move_rect(e, 1855, 6, 18, 39, 28, 19, 18, 52, 28);
+    e.push_back({1856, 10, 2, kFontBlack8, kFontBlack12});
     return e;
 }
 

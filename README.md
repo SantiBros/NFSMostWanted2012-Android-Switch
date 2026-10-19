@@ -42,6 +42,12 @@ folder, and race through Fairhaven, handheld or docked.
 
 ## Screenshots
 
+<p align="center">
+  <img src="docs/images/race.gif" alt="A few seconds of a race: overtaking on the way to first place" width="720">
+</p>
+<p align="center"><sub>A few seconds of a race, recorded frame by frame on the port's PC test build at the
+Switch's handheld resolution. It shows how the game looks, not the console's frame rate.</sub></p>
+
 <table>
   <tr>
     <td width="50%"><img src="docs/images/screenshots/race-intro.jpg" alt="Race intro cinematic"></td>
@@ -52,25 +58,34 @@ folder, and race through Fairhaven, handheld or docked.
     <td align="center"><sub>Racing through Fairhaven with the controller</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/map.jpg" alt="The map with the controller highlight on an event"></td>
+    <td><img src="docs/images/screenshots/race-docked-1080p.jpg" alt="A race at 1920x1080, docked"></td>
+    <td><img src="docs/images/screenshots/map.jpg" alt="The map with the controller highlight on an event and + for EasyDrive"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Docked: the race at 1920×1080</sub></td>
+    <td align="center"><sub>The map: every menu works with the D-pad, and + starts the next event</sub></td>
+  </tr>
+  <tr>
     <td><img src="docs/images/screenshots/garage.jpg" alt="The garage"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>Every menu works with the D-pad: the highlight follows the game's style</sub></td>
-    <td align="center"><sub>The garage, with on-screen button hints</sub></td>
-  </tr>
-  <tr>
     <td><img src="docs/images/screenshots/showroom.jpg" alt="A car in the 3D showroom"></td>
-    <td><img src="docs/images/screenshots/pause-menu.jpg" alt="The pause menu during a race"></td>
   </tr>
   <tr>
+    <td align="center"><sub>The garage, with on-screen button hints</sub></td>
     <td align="center"><sub>The 3D car showroom</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshots/pause-menu.jpg" alt="The pause menu during a race"></td>
+    <td><img src="docs/images/screenshots/debug-menu.jpg" alt="The port's debug menu over the map"></td>
+  </tr>
+  <tr>
     <td align="center"><sub>The pause menu, mid-race</sub></td>
+    <td align="center"><sub>The port's debug menu (ZL + ZR + Minus): frame rate, VSync, 3D resolution, clocks, sound</sub></td>
   </tr>
 </table>
 
-<sub>Captured with the port's PC test build, which runs the same game code at the Switch's handheld
-resolution (1280×720). The panel in the race shot is the game's own tutorial for controller steering.</sub>
+<sub>Captured with the port's PC test build, which runs the same game code at the Switch's
+resolutions (1280×720 handheld, 1920×1080 docked). The panel in the race shots is the game's own
+tutorial for controller steering. More pictures: the [controls pages](#controls).</sub>
 
 ## Features
 
@@ -104,7 +119,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 
 | | What |
 |---|---|
-| **Console** | A Nintendo Switch running [Atmosphère](https://github.com/Atmosphere-NX/Atmosphere) with the Homebrew Menu. Use emuMMC and keep a backup of your SD card. |
+| **Console** | A Nintendo Switch, Switch OLED or Switch Lite running [Atmosphère](https://github.com/Atmosphere-NX/Atmosphere) with the Homebrew Menu. Use emuMMC and keep a backup of your SD card. |
 | **Game** | Your own *Need for Speed Most Wanted* for Android, version **1.3.128**: the APK with the 32-bit build (`lib/armeabi-v7a`) and the OBB `main.1003128.com.ea.games.nfs13_row.obb` (about 650 MB). One `.xapk` file with both works too. |
 | **SD card** | About 1 GB free. |
 | **PC** | Not needed. |
@@ -245,6 +260,20 @@ straight; about 30° of tilt is full lock. All buttons keep working.<br>
   done it in testing so far).
 
 See the [changelog](CHANGELOG.md) for what changed in each version.
+
+## Help wanted: testers
+
+The port is tested on a PC build that runs the same game code, and on a few consoles. Reports from
+more consoles help the most, in English or Spanish, with `log.txt` from the port's folder:
+
+| What | How to help |
+|---|---|
+| 🔌 **Docking while playing** (new in 0.3.0) | On a Switch or Switch OLED, put the console in the dock and take it out during a race and in the menus. Does the picture stay right? |
+| 🏎️ **Frame rate** | Turn on the frame-rate counter in the debug menu (ZL + ZR + Minus) and play a few races. The `perf:` lines in `log.txt` say what holds the frame rate back. |
+| 🪟 **Reflections** | If the building windows look wrong on your console, a photo helps. |
+| 🌍 **Languages** | If a text still says MOGA, or + / − look wrong in your language, a screenshot helps. |
+
+Open an [issue](../../issues/new/choose): the form asks for everything needed.
 
 ## FAQ
 

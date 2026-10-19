@@ -416,7 +416,15 @@ int main(int argc, char** argv) {
             hle::glq::sync([&] { platform::gl_screenshot(shot); });
             LOGI("control: frame %d -> %s", frame, shot.c_str());
         }
-        if (S.screenshot_every && frame % S.screenshot_every == 0) {
+        // Desktop: NFSMW_SHOT_RANGE=<from>:<to> limits --screenshot-every to those frames.
+        static const std::pair<int, int> shot_range = [] {
+            int a = 0, b = 1 << 30;
+            if (const char* e = std::getenv("NFSMW_SHOT_RANGE")) std::sscanf(e, "%d:%d", &a, &b);
+            return std::make_pair(a, b);
+        }();
+        hle::record_clock_frame();
+        if (S.screenshot_every && frame % S.screenshot_every == 0 && frame >= shot_range.first &&
+            frame <= shot_range.second) {
             char path[256];
             std::snprintf(path, sizeof path, "%s/frame_%05d.png", S.screenshot_dir.c_str(), frame);
             hle::glq::sync([&] { platform::gl_screenshot(path); });

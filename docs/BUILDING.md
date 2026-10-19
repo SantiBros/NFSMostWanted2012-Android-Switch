@@ -61,7 +61,9 @@ own debug AI driver, so races drive themselves during automated tests.
 `NFSMW_TEST_DOCK="600:1920x1080,1800:1280x720"` changes the display size at those frames, as
 docking and undocking do. `NFSMW_NO_OBB_PATCH=1` and `NFSMW_NO_ART_PATCH=1` leave the game's texts
 and layouts, and its controls picture, as they are (MOGA); `NFSMW_OBB_PATCH_DUMP=1` logs every text
-changed. The controls pages' pictures are drawn by `tools/make_controller_art.py` (Pillow), which
+changed. For smooth recordings, `NFSMW_RECORD_FPS=30` gives the game a clock that advances 1/30 s
+per frame whatever the PC's speed, and `NFSMW_SHOT_RANGE=<from>:<to>` limits `--screenshot-every`
+to those frames (the race clip in the README: `--screenshot-every 1`). The controls pages' pictures are drawn by `tools/make_controller_art.py` (Pillow), which
 writes `src/game/controller_art_images.inc`; `--preview DIR` also saves them as PNG files. `NFSMW_TEST_SLOT_NULL=1` checks the 0.3.0 game fix for
 the per-frame value store: about 900 frames in, it calls that function with a slot taken away
 (with `NFSMW_NO_SLOT_FIX=1` as well, the game crashes there, as it did before the fix).

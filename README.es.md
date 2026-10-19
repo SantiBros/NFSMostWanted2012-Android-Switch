@@ -44,6 +44,13 @@ en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
 
 ## Capturas
 
+<p align="center">
+  <img src="docs/images/race.gif" alt="Unos segundos de una carrera: adelantando rumbo al primer lugar" width="720">
+</p>
+<p align="center"><sub>Unos segundos de una carrera, grabados cuadro por cuadro con la versión de prueba para PC
+del port, a la resolución portátil de la Switch. Muestra cómo se ve el juego, no los FPS de la
+consola.</sub></p>
+
 <table>
   <tr>
     <td width="50%"><img src="docs/images/screenshots/race-intro.jpg" alt="La presentación de una carrera"></td>
@@ -54,26 +61,35 @@ en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
     <td align="center"><sub>Corriendo por Fairhaven con el control</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/map.jpg" alt="El mapa con el resaltado del control sobre un evento"></td>
+    <td><img src="docs/images/screenshots/race-docked-1080p.jpg" alt="Una carrera a 1920x1080, en el dock"></td>
+    <td><img src="docs/images/screenshots/map.jpg" alt="El mapa con el resaltado del control sobre un evento y + para EasyDrive"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>En el dock: la carrera a 1920×1080</sub></td>
+    <td align="center"><sub>El mapa: todos los menús funcionan con la cruceta, y + empieza el siguiente evento</sub></td>
+  </tr>
+  <tr>
     <td><img src="docs/images/screenshots/garage.jpg" alt="El garaje"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>Todos los menús funcionan con la cruceta, con un resaltado al estilo del juego</sub></td>
-    <td align="center"><sub>El garaje, con los botones indicados en pantalla</sub></td>
-  </tr>
-  <tr>
     <td><img src="docs/images/screenshots/showroom.jpg" alt="Un auto en la sala de exhibición 3D"></td>
-    <td><img src="docs/images/screenshots/pause-menu.jpg" alt="El menú de pausa durante una carrera"></td>
   </tr>
   <tr>
+    <td align="center"><sub>El garaje, con los botones indicados en pantalla</sub></td>
     <td align="center"><sub>La sala de exhibición de autos en 3D</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshots/pause-menu.jpg" alt="El menú de pausa durante una carrera"></td>
+    <td><img src="docs/images/screenshots/debug-menu.jpg" alt="El menú de depuración del port sobre el mapa"></td>
+  </tr>
+  <tr>
     <td align="center"><sub>El menú de pausa, en plena carrera</sub></td>
+    <td align="center"><sub>El menú de depuración del port (ZL + ZR + Menos): FPS, VSync, resolución 3D, relojes, sonido</sub></td>
   </tr>
 </table>
 
-<sub>Capturadas con la versión de prueba para PC del port, que ejecuta el mismo código del juego a la
-resolución portátil de la Switch (1280×720). El panel de la captura de carrera es el tutorial del
-propio juego para manejar con control.</sub>
+<sub>Capturadas con la versión de prueba para PC del port, que ejecuta el mismo código del juego a
+las resoluciones de la Switch (1280×720 en modo portátil, 1920×1080 en el dock). El panel de las
+capturas de carrera es el tutorial del propio juego para manejar con control. Más imágenes: las
+[páginas de controles](#controles).</sub>
 
 ## Características
 
@@ -112,7 +128,7 @@ propio juego para manejar con control.</sub>
 
 | | Qué |
 |---|---|
-| **Consola** | Una Nintendo Switch con [Atmosphère](https://github.com/Atmosphere-NX/Atmosphere) y el Homebrew Menu. Usa emuMMC y guarda un respaldo de tu tarjeta SD. |
+| **Consola** | Una Nintendo Switch, Switch OLED o Switch Lite con [Atmosphère](https://github.com/Atmosphere-NX/Atmosphere) y el Homebrew Menu. Usa emuMMC y guarda un respaldo de tu tarjeta SD. |
 | **Juego** | Tu propio *Need for Speed Most Wanted* para Android, versión **1.3.128**: el APK con la versión de 32 bits (`lib/armeabi-v7a`) y el OBB `main.1003128.com.ea.games.nfs13_row.obb` (unos 650 MB). También sirve un solo archivo `.xapk` con los dos. |
 | **Tarjeta SD** | Alrededor de 1 GB libre. |
 | **PC** | No hace falta. |
@@ -259,6 +275,21 @@ recta; unos 30° de inclinación es el giro máximo. Todos los botones siguen fu
   siguientes no lo han hecho en las pruebas hasta ahora).
 
 En el [registro de cambios](CHANGELOG.md) (en inglés) está lo que cambió en cada versión.
+
+## Se buscan testers
+
+El port se prueba en una versión para PC que ejecuta el mismo código del juego, y en algunas
+consolas. Los reportes de más consolas son los que más ayudan, en español o en inglés, con el
+`log.txt` de la carpeta del port:
+
+| Qué | Cómo ayudar |
+|---|---|
+| 🔌 **Poner y sacar del dock mientras juegas** (nuevo en la 0.3.0) | En una Switch o Switch OLED, pon la consola en el dock y sácala durante una carrera y en los menús. ¿La imagen se ve bien? |
+| 🏎️ **FPS** | Activa el contador de FPS en el menú de depuración (ZL + ZR + Menos) y juega algunas carreras. Las líneas `perf:` de `log.txt` dicen qué limita los FPS. |
+| 🪟 **Reflejos** | Si las ventanas de los edificios se ven mal en tu consola, una foto ayuda. |
+| 🌍 **Idiomas** | Si un texto todavía dice MOGA, o el + y el − se ven mal en tu idioma, una captura ayuda. |
+
+Abre un [issue](../../issues/new/choose): el formulario pide todo lo necesario.
 
 ## Preguntas frecuentes
 

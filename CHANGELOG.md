@@ -19,7 +19,7 @@ All notable changes to the port. The release zip's `README.txt` carries the same
   say "Switch", + and − ("SWITCH GAME CONTROLS", "Tap the + button to PAUSE"). The port changes
   the game's text tables in memory as the game reads them, one text at a time (the game shares
   words such as "START" between texts; only the controller ones change); the OBB on your SD card
-  is not touched.
+  is not touched. On the map, the EasyDrive button shows a + in its middle.
 - **New controller pictures on the controls pages.** The drawing of the MOGA gamepad is replaced
   by two drawings of the port's own, in the game's style: a handheld console in handheld mode and
   a gamepad when docked; the picture changes by itself when you dock or undock. The buttons are

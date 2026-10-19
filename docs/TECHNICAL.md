@@ -370,12 +370,14 @@ the Switch's buttons:
   with a rectangle in layout units around the page's centre, a rotation and a content such as a
   `Text` or a `SubLayout`; each line is a sublayout, `options_help_guide_left`/`_left2`/`_right`/
   `_right2`, made of a stretched straight piece and a fixed 40 × 20 bend whose end is a corner of
-  the rectangle). The port moves 23 entries of the two pages, checking every old value first:
+  the rectangle). The port changes 24 entries, checking every old value first:
   on the game page the drift line ends on A, and the pause callout moves above the picture with a
   line down to +; on the menu page everything moves 20 units down (as on the game page), the
   EASYDRIVE callout moves above the picture with a line down to +, the Origin callout (EA's
   online account) moves off the page, and the face buttons' lines keep their places while their
-  texts trade (the line to the top button now says what X does, and so on).
+  texts trade (the line to the top button now says what X does, and so on). On the map, the
+  EasyDrive button's label (now "+" instead of "START") moves to the middle of the round button,
+  in the larger font.
 
 Both can be turned off for comparisons: `NFSMW_NO_OBB_PATCH=1` (texts and lines) and
 `NFSMW_NO_ART_PATCH=1` (pictures). `NFSMW_OBB_PATCH_DUMP=1` logs every text changed.

@@ -59,6 +59,8 @@ void gl_set_scene_scale(float s);
 // The real screen's size when it differs from the game's (docked / undocked
 // while playing): everything the game draws is scaled to it.
 void gl_set_output_size(int w, int h);
+// Desktop recording aid (NFSMW_RECORD_FPS, see libc_misc.cpp): once per frame.
+void record_clock_frame();
 float gl_output_scale();  // real screen / game screen (1 = the size the game started with)
 // Replace part of a texture with RGBA pixels (bottom row first, as GL reads
 // them); the texture bound before stays bound. Copies the pixels; call from
