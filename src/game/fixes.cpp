@@ -223,16 +223,109 @@ bool install(elf::Module* m) {
 }
 }  // namespace timing_null
 
+// ---- null slot in the function that stores per-frame values (0.3.0) ---------
+// A sibling of the timing function above. The function at 0x5664A4 stores a
+// value of one kind (its first argument, r8) into a table of slots it reaches
+// from the same global: [[G + 4] + kind * 4], reading +0x3C and writing +0x40.
+// For kind 2 it then also updates the slots of kinds 3, 4, 7 and 8. In a
+// desktop test run of 0.2.8 (a cold start, about 19 s in, loading into a race)
+// the slot was not there yet and the game crashed reading address 0x3C, as in
+// the timing function. The function now returns at once, storing nothing,
+// when a slot it needs is missing; the slots appear as the race finishes
+// loading.
+namespace slot_null {
+bool install(elf::Module* m) {
+    const u32 b = m->base;
+    const std::pair<u32, u32> expect[] = {
+        {0x5664D4, 0xE59F0698}, {0x5664D8, 0xE79F0000}, {0x5664DC, 0xE5902004}, {0x5664E4, 0xE7920108},
+        {0x5664F8, 0xE590203C}, {0x5664FC, 0xE2876001}, {0x566500, 0xE5836000}, {0x566978, 0xE3580002},
+        {0x566990, 0xE5911008}, {0x5669CC, 0xE591201C}, {0x566A08, 0xE5910020}, {0x566A9C, 0xE591000C},
+        {0x566AA0, 0xE5911010}, {0x566B48, 0xE590101C}, {0x566B58, 0xE5900020}, {0x566B60, 0xE24BD038},
+        {0x566B64, 0xECBD8B06}, {0x566B68, 0xE28DD004}, {0x566B6C, 0xE8BD8FF0},
+    };
+    for (const auto& [off, word] : expect)
+        if (mem::r32(b + off) != word) return false;
+    // At 0x5664F8: r0 = the slot of kind r8, r2 = the table. ip is free (the
+    // function has just made a call, and does not use ip before writing it).
+    std::vector<u32> c;
+    c.push_back(0xE3500000);  // cmp r0, #0
+    c.push_back(0x0A00000E);  // beq ret
+    c.push_back(0xE3580002);  // cmp r8, #2
+    c.push_back(0x1A00000B);  // bne go
+    for (u32 off : {12u, 16u, 28u, 32u}) {
+        c.push_back(0xE592C000 | off);  // ldr ip, [r2, #off]
+        c.push_back(0xE35C0000);        // cmp ip, #0
+        c.push_back(0x0A000000);        // beq ret (offset filled in below)
+    }
+    // go: the two instructions replaced, then back
+    const size_t go = c.size();
+    c.push_back(0xE590203C);  // ldr r2, [r0, #0x3c]
+    c.push_back(0xE2876001);  // add r6, r7, #1
+    c.push_back(0xE51FF004);  // ldr pc, [pc, #-4]
+    c.push_back(b + 0x566500);
+    // ret: the function's own epilogue (restores sp from fp)
+    const size_t ret = c.size();
+    c.push_back(0xE51FF004);  // ldr pc, [pc, #-4]
+    c.push_back(b + 0x566B60);
+    auto branch = [&](size_t at, size_t to, u32 cond) {
+        c[at] = cond | 0x0A000000 | (((u32)((s32)to - (s32)at - 2)) & 0xFFFFFF);
+    };
+    branch(1, ret, 0x00000000);  // beq
+    branch(3, go, 0x10000000);   // bne
+    for (int i = 0; i < 4; i++) branch(4 + i * 3 + 2, ret, 0x00000000);
+    const u32 stub = upload::emit(c);
+    mem::w32(b + 0x5664F8, 0xE51FF004);  // ldr pc, [pc, #-4]
+    mem::w32(b + 0x5664FC, stub);
+    return true;
+}
+}  // namespace slot_null
+
 void apply() {
     elf::Module* m = elf::find("libapp.so");
     if (!m) return;
     if (!timing_null::install(m)) LOGW("game fix skipped (different game build): timing function null check");
     else LOGI("game fix applied: null check in a timing function");
+    if (std::getenv("NFSMW_NO_SLOT_FIX")) LOGW("game fix off (NFSMW_NO_SLOT_FIX): per-frame value slot null check");
+    else if (!slot_null::install(m)) LOGW("game fix skipped (different game build): per-frame value slot null check");
+    else LOGI("game fix applied: null check in the per-frame value store");
     if (!std::getenv("NFSMW_NO_UPLOAD_FIX") && !upload::install(m))
         LOGW("game fix skipped (different game build): texture upload hand-off");
     if (std::getenv("NFSMW_DIAG_CMDBUF")) diag_cmdbuf(m);
 }
 
-void frame() { upload::service(); }
+// Debugging aid: NFSMW_TEST_SLOT_NULL=1 calls the per-frame value store
+// (slot_null above) once, about 900 frames in, with a slot it needs taken
+// away for the call, and logs whether it came back.
+void test_slot_null() {
+    static const bool on = std::getenv("NFSMW_TEST_SLOT_NULL") != nullptr;
+    static int frames = 0;
+    if (!on || ++frames != 900) return;
+    elf::Module* m = elf::find("libapp.so");
+    if (!m) return;
+    const u32 b = m->base;
+    const u32 got = b + 0x5664D8 + 8 + mem::r32(b + 0x566B74);  // as the function finds it
+    const u32 g = mem::r32(got);
+    const u32 table = g ? mem::r32(g + 4) : 0;
+    if (!table) {
+        LOGW("slot test: the table is not there yet");
+        return;
+    }
+    const u32 buf = mem::static_alloc(256, 16);
+    struct Case {
+        u32 kind, missing;
+    };
+    for (const Case& t : {Case{2, 2}, Case{2, 7}, Case{5, 5}}) {
+        const u32 saved = mem::r32(table + t.missing * 4);
+        mem::w32(table + t.missing * 4, 0);
+        cpu::current().call(b + 0x5664A4, {t.kind, buf});
+        mem::w32(table + t.missing * 4, saved);
+        LOGI("slot test: store of kind %u with slot %u missing returned (slot was 0x%08X)", t.kind, t.missing, saved);
+    }
+}
+
+void frame() {
+    upload::service();
+    test_slot_null();
+}
 
 }  // namespace game::fixes
