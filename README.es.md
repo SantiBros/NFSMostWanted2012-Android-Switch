@@ -340,7 +340,7 @@ este proyecto no copia imágenes ni diseños de Nintendo (ni de EA). El port sol
 
 Por eso los dibujos de las páginas de controles son originales, al estilo del juego. Lo que importa
 para jugar es igual que en tu Switch: cada botón está donde está en la consola (X arriba, Y a la
-izquierda, A a la derecha, B abajo, − y + arriba, L y R en los gatillos), y las líneas del juego
+izquierda, A a la derecha, B abajo, − y + arriba, L y R en el borde superior), y las líneas del juego
 apuntan al botón correcto. El dibujo también sigue cómo juegas: una consola portátil en modo
 portátil y un control cuando está en el dock.
 </details>
