@@ -58,6 +58,11 @@ translated game code (run with `NFSMW_SAMPLE_OUT=<file>` and `PERF_BUILDID_DIR=<
 and `NFSMW_UNSAFE_FP=1` (x86 only: skip exact ARM floating-point emulation).
 `NFSMW_PATCH="libapp.so+0x340138=e3a03001,libapp.so+0x34013c=e5c43023"` turns on the game's
 own debug AI driver, so races drive themselves during automated tests.
+`NFSMW_TEST_DOCK="600:1920x1080,1800:1280x720"` changes the display size at those frames, as
+docking and undocking do. `NFSMW_NO_OBB_PATCH=1` and `NFSMW_NO_ART_PATCH=1` leave the game's texts
+and controls picture as they are (MOGA). `NFSMW_TEST_SLOT_NULL=1` checks the 0.3.0 game fix for
+the per-frame value store: about 900 frames in, it calls that function with a slot taken away
+(with `NFSMW_NO_SLOT_FIX=1` as well, the game crashes there, as it did before the fix).
 `-DNFSMW_SWITCH_TEST=ON` builds with the Switch memory/JIT model. The ARM64 cross build
 (`cmake/aarch64-linux.cmake`, `-DNFSMW_NO_GL=ON`) runs under `qemu-aarch64`.
 

@@ -10,6 +10,7 @@ Building it is in [BUILDING.md](BUILDING.md).
 - [Performance](#performance)
 - [Online services are blocked](#online-services-are-blocked)
 - [Resolution](#resolution)
+- [The Switch's buttons in the game's texts](#the-switchs-buttons-in-the-games-texts-030)
 - [Controller support in the menus](#controller-support-in-the-menus)
 - [Gyro steering](#gyro-steering)
 - [Debug menu (performance settings)](#debug-menu-performance-settings)
@@ -20,8 +21,10 @@ Building it is in [BUILDING.md](BUILDING.md).
 
 The Android game is a 32-bit ARM program; Switch homebrew runs 64-bit code only. The loader:
 
-1. **Runs the 32-bit code through a translator.** [Dynarmic](https://github.com/azahar-emu/dynarmic)
-   (the recompiler used by 3DS emulators) translates the game's ARM code to the host CPU.
+1. **Runs the 32-bit code through a CPU recompiler.** [Dynarmic](https://github.com/azahar-emu/dynarmic)
+   (the recompiler used by 3DS emulators) translates each block of the game's ARM code into
+   host code the first time it runs, and from then on the host CPU runs the translation. This
+   is the one part of the port that is emulation, of the CPU only (see below).
 2. **Loads the game's `.so` files itself** (`src/core/elf.cpp`) into a 32-bit guest address
    space and links them against host implementations of everything they import.
 3. **Re-implements the Android system libraries the game uses** (`src/hle/`): about 330 libc,
@@ -37,6 +40,21 @@ The Android game is a 32-bit ARM program; Switch homebrew runs 64-bit code only.
 The Switch-specific parts are in `src/platform/platform_switch.cpp` (EGL/Mesa, HID, touch,
 audout, memory) and a small Dynarmic patch (`patches/dynarmic-switch.patch`). The patch makes
 the JIT write code through one mapping and run it from another, as Horizon requires.
+
+**Why the game's code is translated rather than run as it is.** The Switch's Cortex-A57 can
+execute 32-bit ARM (A32/T32) code, but Horizon runs a thread in 32-bit state only in a process it
+created as a 32-bit one; a 64-bit process cannot switch to 32-bit code for part of its work.
+Horizon does support 32-bit processes (some commercial games are 32-bit), but homebrew is 64-bit
+throughout: an `.nro` runs inside the
+Homebrew Menu's 64-bit loader process, and libnx, devkitA64 and the Mesa/nouveau GPU driver the
+port is built on exist only for AArch64. Running the game's code without translation would mean
+a 32-bit Switch runtime, graphics driver and C library that do not exist, and a port installed as
+a title instead of started from the Homebrew Menu. So the CPU is the one emulated part:
+Dynarmic, its JIT cache (`src/core/jit_cache.cpp`) and native versions of a few hot game
+functions (`src/game/native.cpp`) keep its cost down. Nothing else is emulated: there is no
+Android system image, no Dalvik/ART virtual machine and no emulated GPU. The game's OpenGL ES
+calls go to the Switch's GPU driver (through a thin layer that tracks state and scales the
+screen), and its file, sound, input and Java calls are answered by the port's own code.
 
 ## What has been tested
 
@@ -58,8 +76,11 @@ Tested on the desktop build with the original 1.3.128 APK and OBB:
 | Debug menu with performance settings (ZL + ZR + Minus) | working on desktop; the clock and VSync settings only act on a console and are untested there |
 | GL calls on their own thread, redundant GL calls dropped | working on desktop (rendering checked against the unthreaded path) |
 | Direct guest-memory access in the Switch JIT | working in the ARM64 build under qemu; not yet tried on a console |
+| Docking / undocking while playing: the resolution follows (0.3.0) | working on desktop with simulated mode changes, both ways; not yet tried on a console |
+| Switch button names in the texts (11 languages) and the controls picture (0.3.0) | working on desktop, with every texture pack size the Switch uses (720p and 1080p starts) |
 | Random crash at start-up (a bug in the game's texture loading) | fixed in the loader (`src/game/fixes.cpp`) |
 | Rare crash loading into a race (a timing function reaching a missing object) | guarded in the loader (`src/game/fixes.cpp`) |
+| Rare crash loading into a race (the per-frame value store reaching a missing slot, 0.3.0) | guarded in the loader (`src/game/fixes.cpp`); the guard checked by calling the function with a slot taken away (`NFSMW_TEST_SLOT_NULL=1`) |
 | 720p handheld / 1080p docked | working (1080p rendering checked on desktop) |
 | First-start setup from the APK or `.xapk`, fixing misplaced files | working on desktop; the Switch's setup screen and its restart are not yet confirmed on many consoles |
 | Same start-up on ARM64 with the Switch memory/JIT model (qemu) | working |
@@ -269,19 +290,72 @@ shows each blocked function the first time the game tries it
 
 ## Resolution
 
-The resolution is chosen when the game starts:
-
-| Started in | Renders at |
+| Console mode | Renders at |
 |---|---|
 | Handheld (or tabletop) | 1280 × 720 |
 | Docked | 1920 × 1080 |
 
 The game's interface scales with the screen, so menus and HUD keep the same proportions at
-both sizes. The game reads its screen size only once, at start-up; it cannot switch while
-running. If you dock or undock while playing, it keeps its start-up resolution and the
-console scales the picture to fit the new screen. Restart the game to get the native
-resolution for the new mode. For the best handheld frame rate, start the game in handheld
-mode; a game started docked keeps rendering 1080p after you undock.
+both sizes.
+
+**Docking and undocking while playing (0.3.0).** The game reads its screen size only once, at
+start-up, and cannot change it: after a full GL context re-creation at a new size it keeps
+drawing its old view. Up to 0.2.8 the port therefore kept the start-up resolution and let the
+console scale the picture to the new screen. Since 0.3.0 the port changes the real screen
+instead and leaves the game's idea of it alone:
+
+- The main loop checks the console's mode once per frame. When it changes, the GL thread
+  re-creates the window surface at the new size (`platform::gl_resize`: the EGL surface is
+  destroyed, the window's buffers are released and resized, a new surface is made; the GL
+  context, and so every texture and shader, stays). If that fails, the old size is kept and
+  the console scales the picture, as before.
+- The GL layer gets an output factor (`hle::gl_set_output_size`): the new screen size divided
+  by the game's start-up screen size (×1.5 when a game started handheld is docked, ×0.667 the
+  other way round). Viewports, scissor boxes and copies on the screen are multiplied by it, and
+  the game's screen-sized render targets are re-created at their new size (the 3D resolution
+  setting multiplies on top). Blits between the screen and those targets stay consistent
+  because both sides scale together; a read-back with mismatched factors is logged once.
+- The port's own drawing (the menu highlight, the debug menu, the frame-rate counter) uses the
+  same factor, with text rendered at the new pixel size.
+
+So a game started in handheld mode and then docked renders a true 1080p, and one started
+docked and then undocked renders its 3D scene at 720p again, as a handheld start does. When
+the console's mode does not change, the cost is one comparison per frame and one per viewport
+call. The resize itself takes a few frames; `log.txt` logs it with its duration
+(`display: now 1920x1080 ...`). On the desktop test build, `NFSMW_TEST_DOCK` simulates the
+mode changes (for example `600:1920x1080,1800:1280x720`).
+
+## The Switch's buttons in the game's texts (0.3.0)
+
+The game was made for touch screens and the MOGA gamepad, and the port hands it a MOGA Pro (see
+`src/hle/jni/`). Its controls page (pause > CONTROLS, or *Options > Controls*) and its tutorials
+therefore said "MOGA", "Start" and "Select". Since 0.3.0 they name the Switch's buttons:
+
+- **Texts** (`src/game/obb_patch.cpp`). The game measures and draws its text one glyph at a time
+  through the Java `BitmapGraphics` class, so the texts have to change at their source: the string
+  tables `published/stringdata/<language>/nfsmw_android.sb` in the OBB (EA's chunked SBIN format:
+  a string table in `CHDR`/`CDAT`, and `StringPair` records in `DATA` that tie each key to its
+  text). At start-up a background thread reads the 11 tables (one per language), changes the
+  texts (`UI_MOGA_START` and `UI_MOGA_SELECT` become + and −, "Start" in the pause tutorial becomes
+  +, "MOGA" becomes "Switch", or "SWITCH" in titles in capitals: 119 texts in all), appends each new
+  text to the table, points its entry at it and recomputes the chunks' FNV-1 checksums. The OBB
+  on the SD card is never written to. The changed tables go into an in-memory tail that the OBB
+  cache (`src/hle/file_cache.cpp`, `set_tail`) shows the game after the real end of the file:
+  the tables, stored uncompressed, then a copy of the zip's central directory that points at
+  them, and a new end record. The game opens the OBB as a zip, finds the new directory at the
+  new end and reads the new tables; everything else still comes from the card. About 1.2 MiB
+  of memory, a few milliseconds on a background thread, before the game opens the OBB.
+- **The picture** (`src/game/controller_art.cpp`). The controller drawn on that page,
+  `hud/MogaController.tif`, sits in RGBA texture atlases in the in-game and menu texture packs
+  (`published.{1x,2x,4x}/texturepacks_ui/{in_game,menu}.sba`, the same 628 × 431 picture in all
+  six). The packs' `Box` records give each picture's place in its atlas; the atlases are stored
+  bottom-up. When the game uploads one of those atlases (`glTexImage2D`), the port checks the
+  atlas's size and a checksum of the parts it changes, and if they match, removes the MOGA logo
+  (the panel and its dividers are plain vertical bands, so a clean row is copied over it) and
+  replaces SELECT / START with a − and a + in the labels' white. Nothing else in the drawing
+  changes: it keeps the MOGA's shape, with A / B / X / Y where the MOGA has them.
+
+Both can be turned off for comparisons: `NFSMW_NO_OBB_PATCH=1` and `NFSMW_NO_ART_PATCH=1`.
 
 ## Controller support in the menus
 
@@ -456,7 +530,9 @@ src/
                 player's APK (setup), controls (MOGA), gyro
                 steering (motion), controller menu navigation (ui_nav, overlay), debug menu
                 (debug_menu), performance settings (perf, prefs = settings.ini), fixes for game
-                bugs, native versions of hot game code (native), FMOD audio pump
+                bugs, native versions of hot game code (native), FMOD audio pump, the
+                game's texts and controller picture with the Switch's buttons (obb_patch,
+                controller_art)
   platform/     Linux (desktop) and Switch backends (Switch sound output: audio_switch,
                 with the 24 to 48 kHz converter in resampler.h)
 tools/

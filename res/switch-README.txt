@@ -7,10 +7,13 @@ WHAT THIS IS
 ------------
 A port of the Android game Need for Speed: Most Wanted (version 1.3.128), the
 mobile version of Most Wanted (2012), to the Nintendo Switch, as homebrew for
-Atmosphere. The port runs the Android game's own 32-bit ARM code: it translates
-that code for the Switch's CPU on the fly (with the Dynarmic recompiler),
-provides the parts of Android the game expects (files, graphics through OpenGL
-ES, sound, input) and drives it like a phone would.
+Atmosphere. The port loads the Android game's own libraries and answers
+everything the game asks Android for (files, graphics through OpenGL ES, sound,
+input) with its own Switch code; there is no phone or Android system
+underneath. One part does work like an emulator: the game is 32-bit ARM code
+and Switch homebrew runs 64-bit code only, so the Dynarmic recompiler
+translates the game's code into the Switch's 64-bit code the first time it
+runs, and the Switch then runs the translation.
 
 The port contains NO game files. You need your own copy of the Android game
 (its APK and OBB files); they stay on your SD card in the game folder.
@@ -25,7 +28,10 @@ This project is not affiliated with or endorsed by Electronic Arts or Nintendo.
 
 FEATURES
 --------
-  * 720p in handheld mode, 1080p when docked.
+  * 720p in handheld mode, 1080p when docked. You can dock or undock while
+    you play: the resolution follows.
+  * The game's controls page and tutorials name the Switch's buttons
+    (+ and - instead of Start and Select, "Switch" instead of "MOGA").
   * The whole game is playable with the controller: driving, and every menu
     with a highlight you move with the D-pad. The touch screen still works.
   * Optional gyro steering: tilt the console or controller like a wheel.
@@ -119,7 +125,8 @@ about 440 MB of memory, which is not enough for the game.
 
 CONTROLS
 --------
-Driving (the game sees a MOGA Pro gamepad, which it supports natively):
+Driving (the port hands the game a MOGA Pro gamepad, which it supports
+natively; its controls page shows the Switch's buttons):
 
   Left stick ................ steer
   A ......................... drift
@@ -228,6 +235,21 @@ When you report a problem, attach log.txt from this folder.
 
 WHAT'S NEW
 ----------
+0.3.0
+  * Dock and undock while you play: the port switches to the new
+    resolution right away (720p handheld, 1080p docked), 3D scene included.
+    Before, the game kept the resolution it started with until a restart.
+  * The game's controls page and tutorials name the Switch's buttons, in
+    all 11 languages: "Switch" instead of "MOGA", + and - instead of Start
+    and Select. The OBB on the SD card is not changed (it happens in memory).
+  * The controller picture on the controls page no longer shows the MOGA
+    logo, and its Select / Start buttons are labelled - and +.
+  * Fixed: a rare crash of the game while loading into a race.
+  * The documents now say plainly how the port works: the game's 32-bit
+    code goes through a CPU recompiler (the part that works like an
+    emulator, since Switch homebrew can only run 64-bit code); nothing else
+    is emulated.
+
 0.2.8
   * Fixed: the port crashed at start-up on some consoles. The game expects
     its memory to start out as zeros; on the Switch it still held what the

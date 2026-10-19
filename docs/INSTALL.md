@@ -107,9 +107,9 @@ memory of a game (*title takeover*). Choose **NFS Most Wanted 2012 Loader** (by 
 > Don't start it from the Homebrew Menu in the **Album**: there, homebrew only gets about 440 MB of
 > memory, which is not enough for the game. The port shows a message if you try.
 
-The game starts at **1280×720** in handheld mode and **1920×1080** when docked. It keeps the
-resolution it started with: if you dock or undock while playing, the console scales the picture;
-restart the game to get the native resolution for the new mode.
+The game runs at **1280×720** in handheld mode and **1920×1080** when docked. Since 0.3.0 you can
+dock or undock while playing: the port switches to the new resolution right away (with a short
+pause). Earlier versions kept the resolution the game started with.
 
 ## The port's folder
 
@@ -173,7 +173,7 @@ icon** from your APK, so the Homebrew Menu shows the Need for Speed icon (needs
 With the SD card as drive `E:` (all on one line):
 
 ```
-python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.2.8.nro --out E:\switch\NFSMostWanted2012
+python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.3.0.nro --out E:\switch\NFSMostWanted2012
 ```
 
 macOS / Linux: `python3 prepare_sd.py ... --out /Volumes/SD/switch/NFSMostWanted2012`.

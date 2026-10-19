@@ -8,8 +8,8 @@
 # NFS Most Wanted 2012 (Android) para Nintendo Switch
 
 **Un port homebrew no oficial de la versión Android de *Need for Speed™ Most Wanted* (2012, versión 1.3.128) para Nintendo Switch.**<br>
-El juego original funcionando en tu Switch: no es un emulador de teléfono. Trae tu propia copia,
-ponla en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
+El juego original de Android, cargado por un programa nativo de Switch. Trae tu propia copia, ponla
+en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
 
 [![Última versión](https://img.shields.io/github/v/release/SantiBros/NFSMostWanted2012-Android-Switch?include_prereleases&style=for-the-badge&label=descargar&color=e11d2e&logo=github&logoColor=white)](../../releases)
 [![Descargas](https://img.shields.io/github/downloads/SantiBros/NFSMostWanted2012-Android-Switch/total?style=for-the-badge&label=descargas&color=2b2f38)](../../releases)
@@ -66,10 +66,17 @@ propio juego para manejar con control.</sub>
 
 ## Características
 
-- **El juego real, no un emulador de teléfono.** El código ARM del juego Android se traduce al vuelo
-  para la CPU de la Switch (con [Dynarmic](https://github.com/azahar-emu/dynarmic)); todo lo que lo
-  rodea (archivos, gráficos, sonido, controles) está hecho de nuevo para la Switch.
-- **720p en modo portátil, 1080p en el dock.**
+- **El juego real de Android, sin un teléfono ni un sistema Android debajo.** El port carga las
+  propias librerías del juego, y todo lo que el juego le pide a Android (archivos, gráficos, sonido,
+  controles) lo responde el propio código del port para la Switch. Una parte sí funciona como un
+  emulador: el código ARM de 32 bits del juego pasa por un recompilador de CPU
+  ([Dynarmic](https://github.com/azahar-emu/dynarmic)), porque el homebrew de Switch solo puede
+  ejecutar código de 64 bits ([por qué](#preguntas-frecuentes)).
+- **720p en modo portátil, 1080p en el dock, y puedes conectar o sacar la consola del dock mientras
+  juegas.**
+- **Los botones de la Switch en el juego.** La página de controles y los tutoriales nombran los
+  botones de la Switch en vez del control MOGA para el que se hizo el juego, en los 11 idiomas, y el
+  dibujo del control ya no tiene el logo de MOGA.
 - **Soporte completo de control.** Maneja con las palancas y los botones, y usa todos los menús con
   un resaltado que mueves con la cruceta, dibujado al estilo del juego. La pantalla táctil sigue
   funcionando.
@@ -87,7 +94,7 @@ propio juego para manejar con control.</sub>
   conserva al actualizar.
 - **Menú de depuración** (ZL + ZR + Menos): límite de FPS, VSync, resolución 3D, nivel de detalle,
   relojes de CPU / GPU / memoria, volumen del sonido y contador de FPS.
-- **Dos cierres inesperados del juego original, corregidos** en el port.
+- **Tres cierres inesperados del juego original, corregidos** en el port.
 
 ## Qué necesitas
 
@@ -109,7 +116,7 @@ propio juego para manejar con control.</sub>
 <img src="docs/images/install-steps.es.png" alt="Instalar en 4 pasos: descarga el zip, copia la carpeta switch a la SD, agrega tu APK y tu OBB a la carpeta game, abre con R + cualquier juego" width="100%">
 
 1. **Descarga.** En la página de [Releases](../../releases), en la sección **Assets**,
-   descarga `NFSMostWanted2012-0.2.8.zip` (no "Source code", que es solo para desarrolladores) y
+   descarga `NFSMostWanted2012-0.3.0.zip` (no "Source code", que es solo para desarrolladores) y
    descomprímelo en tu computadora.
 2. **Copia a la SD.** Copia la carpeta `switch` del zip a la raíz de tu tarjeta SD.
 3. **Agrega tu juego.** Copia tu APK y tu OBB en `switch/NFSMostWanted2012/game/`. No los
@@ -129,7 +136,7 @@ propio juego para manejar con control.</sub>
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.2.8.nro   el port
+├── NFSMostWanted2012-0.3.0.nro   el port
 ├── README.txt                    la guía del jugador (en inglés)
 ├── LICENSES.txt                  componentes de código abierto y sus licencias
 ├── game/                         TUS archivos del juego (nunca los compartas)
@@ -161,7 +168,9 @@ progreso se mueven solos.
 
 ## Controles
 
-**Manejo**: el juego ve un control MOGA Pro, que soporta de forma nativa.
+**Manejo**: el port le presenta al juego un control MOGA Pro, que soporta de forma nativa. Desde la
+0.3.0 la página de controles y los tutoriales del juego nombran los botones de la Switch (+ y − en vez
+de Start y Select).
 
 | Switch | Juego |
 |---|---|
@@ -200,7 +209,8 @@ recta; unos 30° de inclinación es el giro máximo. Todos los botones siguen fu
 | Todos los menús con el control, pantalla táctil | ✅ Funciona |
 | Música y efectos de sonido | ✅ Funciona |
 | Partidas guardadas (se conservan al actualizar) | ✅ Funciona |
-| 720p portátil / 1080p en el dock | ✅ Funciona (la resolución se elige al abrir el juego) |
+| 720p portátil / 1080p en el dock | ✅ Funciona |
+| Conectar o sacar del dock mientras juegas | 🧪 Nuevo en la 0.3.0: la resolución cambia al momento. Se agradecen comentarios |
 | FPS | ⚠️ Todavía en ajuste en consola real: el juego apunta a 30 FPS, y en carreras con mucha acción puede bajar de eso con los relojes de fábrica. El menú de depuración permite subir el reloj de la CPU. La 0.2.6 y la 0.2.7 quitan las causas principales de los tirones cortos encontradas hasta ahora. |
 | Cargas | ✅ Más rápidas desde la 0.2.7, sobre todo desde la segunda vez que lo abres (la caché JIT) |
 | Giroscopio, relojes personalizados | 🧪 Nuevo, aún sin confirmar en muchas consolas: se agradecen comentarios |
@@ -209,8 +219,9 @@ recta; unos 30° de inclinación es el giro máximo. Todos los botones siguen fu
 **Problemas conocidos**
 - La primerísima versión de prueba congeló una consola una vez (no se sabe la causa; las versiones
   siguientes no lo han hecho en las pruebas hasta ahora).
-- Si conectas o sacas la consola del dock mientras juegas, se mantiene la resolución con la que se
-  abrió el juego: reinícialo para cambiarla.
+- El control dibujado en la página de controles sigue teniendo la forma del MOGA: sus botones
+  frontales están donde los tiene el MOGA (la A abajo), aunque sus letras son las de la Switch (la A
+  derrapa).
 
 En el [registro de cambios](CHANGELOG.md) (en inglés) está lo que cambió en cada versión.
 
@@ -219,10 +230,23 @@ En el [registro de cambios](CHANGELOG.md) (en inglés) está lo que cambió en c
 <details>
 <summary><b>¿Es un emulador?</b></summary>
 
-No de un teléfono completo. El port carga las propias librerías del juego y ejecuta su código ARM de
-32 bits con un recompilador (Dynarmic), mientras que las partes de Android con las que habla el
-juego (archivos, OpenGL ES, sonido, controles, la parte de Java) están hechas de nuevo para la
-Switch. Más detalles en [cómo funciona](docs/TECHNICAL.md) (en inglés).
+**De la CPU, sí; de todo lo demás, no.**
+
+El juego es un programa ARM de 32 bits (`armeabi-v7a`). El procesador de la Switch puede ejecutar
+código ARM de 32 bits, pero solo en un programa que sea de 32 bits de principio a fin, y el homebrew
+de Switch es solo de 64 bits: el Homebrew Menu, libnx y el driver gráfico Mesa sobre los que está
+hecho el port no existen en 32 bits. Por eso el port ejecuta el código del juego con
+[Dynarmic](https://github.com/azahar-emu/dynarmic), el recompilador de CPU de los emuladores de 3DS.
+Cada parte del código del juego se traduce una vez al código ARM de 64 bits de la Switch, la primera
+vez que se ejecuta, y después la Switch ejecuta esa traducción directamente. Es la misma técnica que
+usa un emulador para su CPU, y es la única parte del port que funciona como uno. La caché JIT
+recuerda lo que ya se tradujo, así que las siguientes veces se hace por adelantado.
+
+Nada más se emula. No hay un teléfono ni un sistema Android debajo, ni una GPU emulada: el port carga
+él mismo las librerías del juego, y lo que el juego le pide a Android (archivos, OpenGL ES, sonido,
+controles, su parte de Java) lo responde el propio código del port para la Switch. Las llamadas
+gráficas del juego van directo al driver de la GPU de la Switch. Más detalles en
+[cómo funciona](docs/TECHNICAL.md) (en inglés).
 </details>
 
 <details>
@@ -318,11 +342,12 @@ pasó la última vez que lo abriste, y nunca contiene archivos del juego.
 
 ## Cómo funciona
 
-El juego de Android es un programa ARM de 32 bits, y el homebrew de Switch solo ejecuta código de
-64 bits. El port:
+El juego de Android es un programa ARM de 32 bits, y el homebrew de Switch solo funciona como
+programas de 64 bits. El port:
 
-1. **Traduce el código del juego** con [Dynarmic](https://github.com/azahar-emu/dynarmic), el
-   recompilador que usan los emuladores de 3DS, adaptado a las reglas de memoria de la Switch.
+1. **Recompila el código del juego** con [Dynarmic](https://github.com/azahar-emu/dynarmic), el
+   recompilador de CPU que usan los emuladores de 3DS (la única parte emulada del port), adaptado a
+   las reglas de memoria de la Switch.
 2. **Carga él mismo las cinco librerías `.so` del juego** y las conecta con reemplazos nativos de
    todo lo que usan: unas 330 funciones de libc, matemáticas e hilos, OpenGL ES 2.0 y APIs de Android.
 3. **Hace el papel de la parte Java**: un JNI simulado con las clases Java del juego (actividad,
@@ -342,7 +367,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-El resultado es `build-switch/NFSMostWanted2012-0.2.8.nro`. Los detalles están en
+El resultado es `build-switch/NFSMostWanted2012-0.3.0.nro`. Los detalles están en
 [docs/BUILDING.md](docs/BUILDING.md) (en inglés).
 
 ## Créditos

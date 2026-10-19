@@ -2,6 +2,50 @@
 
 All notable changes to the port. The release zip's `README.txt` carries the same list.
 
+## [0.3.0]
+
+### Added
+- **Dock and undock while you play.** Up to 0.2.8 the resolution was chosen when the game
+  started: after docking or undocking, the console scaled the picture, and only a restart gave
+  the native resolution. The game itself can't change its screen size once it has started, so
+  the port now changes the real screen around it: when the console is docked or undocked, it
+  re-creates the window at the new size (1280×720 handheld, 1920×1080 docked) and draws
+  everything the game renders at that size, the 3D scene included. A game started handheld and
+  then docked renders a true 1080p; one started docked and then undocked renders 720p again.
+  The switch takes a moment and is logged in `log.txt`. When you don't dock or undock, nothing
+  changes.
+- **The game's texts name the Switch's buttons.** The game was written for a MOGA gamepad, so
+  its controls page and tutorials said "MOGA", "Start" and "Select". In all 11 languages they now
+  say "Switch", + and − ("SWITCH GAME CONTROLS", "Tap the + button to PAUSE"). The port changes
+  the game's text tables in memory as the game reads them; the OBB on your SD card is not
+  touched.
+- **The controller picture on the controls page** no longer shows the MOGA logo, and its
+  Select / Start buttons are labelled − and +. The drawing keeps the MOGA's shape, with A / B /
+  X / Y where the MOGA has them (their letters are the Switch's: A still drifts).
+
+### Fixed
+- **A rare crash of the game while loading into a race.** Found while testing 0.3.0 (it is in
+  0.2.8 too): a function of the game that stores per-frame values could be called before the slot
+  it writes to existed, and the game crashed reading address 0x3C. It is a sibling of the timing
+  function fixed in the first release, with the same symptom. The function now stores nothing
+  until its slots exist.
+
+### Changed
+- **An honest description of how the port works.** The README called the port "not a phone
+  emulator" right before saying that the game's code is translated on the fly. Both were true,
+  but together they were misleading: the CPU part is emulation (the game is 32-bit ARM code,
+  Switch homebrew can only run 64-bit code, so Dynarmic recompiles it), and nothing else is
+  (no phone, no Android system, no emulated GPU). The README, the player's guide and
+  [How it works](docs/TECHNICAL.md#how-it-works) now say so plainly, and explain why the game's
+  code can't run on the Switch without translation.
+- **Performance: unchanged.** Nothing from earlier versions was taken out. On the PC test build,
+  in the same automated race with the JIT cache, the race's loading thread took 3.2–3.6 s
+  (0.2.8: 3.3–3.4 s) and the game's code 10.1–11.0 ms per frame (0.2.8: 10.4–10.7 ms, medians of
+  each run): the same, within the runs' own spread. Docking support costs a comparison per frame
+  until the console's mode changes; the texts are changed once, on a background thread at
+  start-up, and the picture once per texture pack as the game loads it.
+- As after every update, the first start rebuilds the JIT cache.
+
 ## [0.2.8]
 
 ### Fixed
@@ -139,6 +183,8 @@ First release.
 - One tidy folder (`game/` and `save/`), set up by `prepare_sd.py`, which can also give the port
   the game's own icon.
 
+[0.3.0]: ../../releases/tag/v0.3.0
+[0.2.8]: ../../releases/tag/v0.2.8
 [0.2.7]: ../../releases/tag/v0.2.7
 [0.2.6]: ../../releases/tag/v0.2.6
 [0.2.5]: ../../releases/tag/v0.2.5

@@ -8,8 +8,8 @@
 # NFS Most Wanted 2012 (Android) for Nintendo Switch
 
 **An unofficial homebrew port of the Android version of *Need for Speed™ Most Wanted* (2012, version 1.3.128) to the Nintendo Switch.**<br>
-The original game, running on your Switch: not a phone emulator. Bring your own copy, drop it into
-one folder, and race through Fairhaven, handheld or docked.
+The original Android game, loaded by a native Switch program. Bring your own copy, drop it into one
+folder, and race through Fairhaven, handheld or docked.
 
 [![Latest release](https://img.shields.io/github/v/release/SantiBros/NFSMostWanted2012-Android-Switch?include_prereleases&style=for-the-badge&label=download&color=e11d2e&logo=github&logoColor=white)](../../releases)
 [![Downloads](https://img.shields.io/github/downloads/SantiBros/NFSMostWanted2012-Android-Switch/total?style=for-the-badge&color=2b2f38)](../../releases)
@@ -64,10 +64,15 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 
 ## Features
 
-- **The real game, not a phone emulator.** The Android game's own ARM code is translated on the
-  fly for the Switch's CPU (with [Dynarmic](https://github.com/azahar-emu/dynarmic)); everything
-  around it (files, graphics, sound, input) is rebuilt for the Switch.
-- **720p in handheld mode, 1080p docked.**
+- **The real Android game, with no phone or Android system underneath.** The port loads the game's
+  own libraries, and everything the game asks Android for (files, graphics, sound, controls) is
+  answered by the port's own Switch code. One part does work like an emulator: the game's 32-bit
+  ARM code goes through a CPU recompiler ([Dynarmic](https://github.com/azahar-emu/dynarmic)), because
+  Switch homebrew can only run 64-bit code ([why](#faq)).
+- **720p in handheld mode, 1080p docked, and you can dock or undock while you play.**
+- **Switch buttons in the game.** The controls page and tutorials name the Switch's buttons instead
+  of the MOGA gamepad the game was made for, in all 11 languages, and the controller picture has
+  no MOGA logo.
 - **Full controller support.** Drive with the sticks and buttons, and play every menu with a
   highlight you move with the D-pad, drawn in the game's own style. The touch screen still works.
 - **Optional gyro steering.** Tilt the console or the controller like a steering wheel.
@@ -82,7 +87,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 - **Your career in one file** (`save/progress/nfstr_save.sb`): easy to back up, kept across updates.
 - **Debug menu** (ZL + ZR + Minus): frame-rate limit, VSync, 3D resolution, detail level, CPU / GPU /
   memory clocks, sound volume and a frame-rate counter.
-- **Two crashes of the original game fixed** in the loader.
+- **Three crashes of the original game fixed** in the loader.
 
 ## What you need
 
@@ -103,7 +108,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 <img src="docs/images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
 
 1. **Download.** On the [Releases](../../releases) page, under **Assets**, download
-   `NFSMostWanted2012-0.2.8.zip` (not "Source code", which is only for developers) and unzip it on
+   `NFSMostWanted2012-0.3.0.zip` (not "Source code", which is only for developers) and unzip it on
    your computer.
 2. **Copy to the SD card.** Copy the `switch` folder from the zip to the root of your SD card.
 3. **Add your game.** Copy your APK and your OBB into `switch/NFSMostWanted2012/game/`. Don't unzip or
@@ -122,7 +127,7 @@ resolution (1280×720). The panel in the race shot is the game's own tutorial fo
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.2.8.nro   the port
+├── NFSMostWanted2012-0.3.0.nro   the port
 ├── README.txt                    the player's guide
 ├── LICENSES.txt                  open-source components and their licenses
 ├── game/                         YOUR game files (never share them)
@@ -153,7 +158,8 @@ progress are moved over automatically.
 
 ## Controls
 
-**Driving**: the game sees a MOGA Pro gamepad, which it supports natively.
+**Driving**: the port hands the game a MOGA Pro gamepad, which it supports natively. Since 0.3.0 the
+game's controls page and tutorials name the Switch's buttons (+ and − instead of Start and Select).
 
 | Switch | Game |
 |---|---|
@@ -191,7 +197,8 @@ straight; about 30° of tilt is full lock. All buttons keep working.<br>
 | Every menu with the controller, touch screen | ✅ Works |
 | Music and sound effects | ✅ Works |
 | Saves (kept across updates) | ✅ Works |
-| 720p handheld / 1080p docked | ✅ Works (the resolution is chosen when the game starts) |
+| 720p handheld / 1080p docked | ✅ Works |
+| Docking and undocking while you play | 🧪 New in 0.3.0: the resolution follows at once. Feedback welcome |
 | Frame rate | ⚠️ Still being tuned on real hardware: the game targets 30 fps, and busy races can drop below that at stock clocks. The debug menu can raise the CPU clock. 0.2.6 and 0.2.7 remove the main causes of short stutters found so far. |
 | Loading | ✅ Faster since 0.2.7, most of all from the second start on (the JIT cache) |
 | Gyro steering, custom clocks | 🧪 New, not yet confirmed on many consoles: feedback welcome |
@@ -200,8 +207,8 @@ straight; about 30° of tilt is full lock. All buttons keep working.<br>
 **Known issues**
 - The very first test build froze a console once (the cause is not known; later builds have not
   done it in testing so far).
-- Docking or undocking during play keeps the resolution the game started with: restart the game to
-  switch.
+- The controller drawn on the controls page is still the MOGA gamepad's shape: its face buttons sit
+  where the MOGA has them (A at the bottom), though their letters are the Switch's (A drifts).
 
 See the [changelog](CHANGELOG.md) for what changed in each version.
 
@@ -210,9 +217,21 @@ See the [changelog](CHANGELOG.md) for what changed in each version.
 <details>
 <summary><b>Is this an emulator?</b></summary>
 
-Not of a whole phone. The port loads the game's own libraries and runs their 32-bit ARM code
-through a recompiler (Dynarmic), while the parts of Android the game talks to (files, OpenGL ES,
-sound, input, Java glue) are re-implemented natively for the Switch. See [How it works](docs/TECHNICAL.md).
+**For the CPU, yes; for everything else, no.**
+
+The game is a 32-bit ARM program (`armeabi-v7a`). The Switch's processor can run 32-bit ARM code,
+but only in a program that is 32-bit from start to end, and Switch homebrew is 64-bit only: the
+Homebrew Menu, libnx and the Mesa graphics driver the port is built on don't exist in 32-bit. So
+the port runs the game's code through [Dynarmic](https://github.com/azahar-emu/dynarmic), the CPU
+recompiler from 3DS emulators. Each piece of the game's code is translated into the Switch's
+64-bit ARM code once, the first time it runs, and the Switch then runs that translation directly.
+That is the same technique an emulator uses for its CPU, and it is the one part of the port that
+works like one. The JIT cache remembers what was translated, so later starts do it ahead of time.
+
+Nothing else is emulated. There is no phone and no Android system underneath, and no emulated GPU:
+the port loads the game's libraries itself, and what the game asks Android for (files, OpenGL ES,
+sound, input, its Java side) is answered by the port's own Switch code. The game's graphics calls
+go straight to the Switch's GPU driver. See [How it works](docs/TECHNICAL.md).
 </details>
 
 <details>
@@ -308,10 +327,12 @@ happened at the last start, and it never contains game files.
 
 ## How it works
 
-The Android game is a 32-bit ARM program, and Switch homebrew runs 64-bit code only. The loader:
+The Android game is a 32-bit ARM program, and Switch homebrew runs as 64-bit programs only. The
+loader:
 
-1. **Translates the game's code** with [Dynarmic](https://github.com/azahar-emu/dynarmic), the
-   recompiler used by 3DS emulators, patched to run under Horizon's memory rules.
+1. **Recompiles the game's code** with [Dynarmic](https://github.com/azahar-emu/dynarmic), the
+   CPU recompiler used by 3DS emulators (the one emulated part of the port), patched to run under
+   Horizon's memory rules.
 2. **Loads the game's five `.so` libraries itself** and links them to native replacements of
    everything they import: about 330 libc, math and pthread functions, OpenGL ES 2.0 and Android APIs.
 3. **Plays the Java side**: a fake JNI with the game's Java classes (activity, run loop, assets,
@@ -332,7 +353,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-The result is `build-switch/NFSMostWanted2012-0.2.8.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
+The result is `build-switch/NFSMostWanted2012-0.3.0.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
 the details, the Linux test build used for development, and how a release is made.
 
 ## Credits

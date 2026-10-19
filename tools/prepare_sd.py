@@ -32,7 +32,7 @@ Result (--out is the port's folder on the SD card, normally sd:/switch/NFSMostWa
     settings.ini, log.txt         created by the port
 
 Usage:
-    python3 prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro NFSMostWanted2012-0.2.8.nro --out E:/switch/NFSMostWanted2012
+    python3 prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro NFSMostWanted2012-0.3.0.nro --out E:/switch/NFSMostWanted2012
 """
 import argparse
 import hashlib

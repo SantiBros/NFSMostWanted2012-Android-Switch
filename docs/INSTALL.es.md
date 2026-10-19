@@ -111,9 +111,10 @@ abre con toda la memoria de un juego (modo *title takeover*). Elige **NFS Most W
 > No lo abras desde el Homebrew Menu del **Álbum**: ahí el homebrew solo recibe unos 440 MB de
 > memoria, y no le alcanza al juego. Si lo intentas, el port muestra un aviso.
 
-El juego arranca a **1280×720** en modo portátil y a **1920×1080** en el dock. Mantiene la
-resolución con la que arrancó: si pones o sacas la consola del dock mientras juegas, la consola
-escala la imagen; reinicia el juego para tener la resolución nativa del nuevo modo.
+El juego funciona a **1280×720** en modo portátil y a **1920×1080** en el dock. Desde la 0.3.0
+puedes poner o sacar la consola del dock mientras juegas: el port cambia a la nueva resolución al
+momento (con una pausa corta). Las versiones anteriores mantenían la resolución con la que arrancó
+el juego.
 
 ## La carpeta del port
 
@@ -177,7 +178,7 @@ Need for Speed (necesita `pip install pillow`). El `.nro` publicado nunca trae i
 Con la tarjeta SD como unidad `E:` (todo en una sola línea):
 
 ```
-python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.2.8.nro --out E:\switch\NFSMostWanted2012
+python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.3.0.nro --out E:\switch\NFSMostWanted2012
 ```
 
 En macOS / Linux: `python3 prepare_sd.py ... --out /Volumes/SD/switch/NFSMostWanted2012`.
