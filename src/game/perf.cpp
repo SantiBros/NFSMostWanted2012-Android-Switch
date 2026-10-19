@@ -24,7 +24,8 @@ namespace {
 using Clock = std::chrono::steady_clock;
 
 Stats g_stats;
-int g_screen_w = 0, g_screen_h = 0;
+int g_screen_w = 0, g_screen_h = 0;  // the game's screen
+int g_out_w = 0, g_out_h = 0;        // the real screen (0: the game's)
 int g_paced_interval = 0;   // swap interval that paces gl_swap (0 = none)
 bool g_limiter = false;     // sleep to hold the frame-rate limit
 double g_period_us = 0;
@@ -89,7 +90,8 @@ void log_summary() {
     LOGI("perf: %.1f fps (frame %.1f ms, slowest %.0f ms, %d hitches) | game %.1f ms/frame | GL thread %.0f%% busy, "
          "waited %.1f ms/frame, swap %.1f ms/frame | %.0f GL calls | %s %dx%d, detail %s, limit %s, vsync %s | %s | %s%s",
          fps, frame_ms, w.worst, w.hitches, game_ms, 100 * busy, w.gl_wait / w.windows, swap_ms, w.calls / w.windows,
-         g_docked ? "docked" : "handheld", g_screen_w, g_screen_h, tier_name(startup_tier()),
+         g_docked ? "docked" : "handheld", g_out_w ? g_out_w : g_screen_w, g_out_h ? g_out_h : g_screen_h,
+         tier_name(startup_tier()),
          limit ? std::to_string(limit).c_str() : "off", p.vsync ? "on" : "off", clocks, limited_by, extra.c_str());
 }
 
@@ -170,6 +172,15 @@ void wanted_clocks(u32& cpu, u32& gpu, u32& mem) {
     if (p.gpu_khz == prefs::kClockAuto) gpu = g_docked ? 0 : 460800000u;  // handheld: Nintendo's top handheld clock
     else gpu = p.gpu_khz > 0 ? (u32)p.gpu_khz * 1000u : 0;
     mem = p.mem_khz > 0 ? (u32)p.mem_khz * 1000u : 0;
+}
+
+void set_output_size(int w, int h) {
+    g_out_w = w == g_screen_w && h == g_screen_h ? 0 : w;
+    g_out_h = w == g_screen_w && h == g_screen_h ? 0 : h;
+}
+void output_size(int& w, int& h) {
+    w = g_out_w ? g_out_w : g_screen_w;
+    h = g_out_h ? g_out_h : g_screen_h;
 }
 
 void init(int screen_w, int screen_h) {
@@ -309,8 +320,10 @@ void draw_counter(int screen_w, int screen_h) {
         std::snprintf(line, sizeof line, "clocks: not available on this system");
     lines[2] = line;
     float sc = hle::gl_scene_scale();
-    std::snprintf(line, sizeof line, "%dx%d   3D %dx%d   detail %s   limit %s%s", g_screen_w, g_screen_h,
-                  (int)std::lround(g_screen_w * sc), (int)std::lround(g_screen_h * sc), tier_name(startup_tier()),
+    int ow, oh;
+    output_size(ow, oh);
+    std::snprintf(line, sizeof line, "%dx%d   3D %dx%d   detail %s   limit %s%s", ow, oh, (int)std::lround(ow * sc),
+                  (int)std::lround(oh * sc), tier_name(startup_tier()),
                   p.fps_limit ? (std::to_string(p.fps_limit) + " FPS").c_str() : "off", p.vsync ? "   VSync" : "");
     lines[3] = line;
     float px = 16 * u, lh = 21 * u, w = 0;

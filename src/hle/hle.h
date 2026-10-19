@@ -56,6 +56,10 @@ int gl_fbtrace_left();
 // allocated at scale * screen size (0.5-1).
 void gl_set_screen_size(int w, int h);
 void gl_set_scene_scale(float s);
+// The real screen's size when it differs from the game's (docked / undocked
+// while playing): everything the game draws is scaled to it.
+void gl_set_output_size(int w, int h);
+float gl_output_scale();  // real screen / game screen (1 = the size the game started with)
 float gl_scene_scale();
 bool gl_scene_scaled_targets();  // the game has drawn into a scaled target
 

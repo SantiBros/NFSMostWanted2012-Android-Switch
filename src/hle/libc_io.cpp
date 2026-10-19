@@ -15,6 +15,7 @@
 
 #include "game/config.h"
 #include "game/paths.h"
+#include "hle/file_cache.h"
 #include "hle/hle.h"
 #include "platform/platform.h"
 
@@ -198,6 +199,7 @@ int h_stat(u32 path, u32 buf) {
         LOGD("stat(%s) failed", str(path));
         return -1;
     }
+    st.st_size += (off_t)hle::filecache::tail_size(hp);  // the OBB as the game sees it (0.3.0)
     put_stat(buf, st);
     return 0;
 }

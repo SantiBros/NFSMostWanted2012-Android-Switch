@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -77,6 +78,7 @@ bool finish_setup_screen(const std::string&, bool) {
 extern "C" u64 nfsmw_gl_noop() { return 0; }
 bool gl_init(int, int) { return true; }
 void preferred_display_size(int&, int&) {}
+bool gl_resize(int, int) { return true; }
 void gl_swap() {}
 void* gl_get_proc(const char*) { return (void*)&nfsmw_gl_noop; }
 bool gl_should_close() { return false; }
@@ -126,13 +128,52 @@ bool gl_init(int width, int height) {
     return true;
 }
 
-void preferred_display_size(int&, int&) {}
+// Debugging aid: NFSMW_TEST_DOCK="<frame>:<w>x<h>,..." changes the display
+// size at those frames, as docking or undocking a Switch does.
+int g_frames_swapped = 0;
+void preferred_display_size(int& width, int& height) {
+    static std::vector<std::array<int, 3>> plan = [] {
+        std::vector<std::array<int, 3>> p;
+        if (const char* s = std::getenv("NFSMW_TEST_DOCK")) {
+            int f, w, h, n = 0;
+            while (std::sscanf(s, "%d:%dx%d%n", &f, &w, &h, &n) == 3) {
+                p.push_back({f, w, h});
+                s += n;
+                if (*s == ',') s++;
+            }
+        }
+        return p;
+    }();
+    for (const auto& [f, w, h] : plan)
+        if (g_frames_swapped >= f) width = w, height = h;
+}
+
+bool gl_resize(int width, int height) {
+    eglMakeCurrent(g_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglDestroySurface(g_dpy, g_surf);
+    EGLConfig cfg;
+    EGLint n = 0;
+    const EGLint cfg_attr[] = {EGL_SURFACE_TYPE, EGL_PBUFFER_BIT, EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                               EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
+                               EGL_DEPTH_SIZE, 24, EGL_STENCIL_SIZE, 8, EGL_NONE};
+    eglChooseConfig(g_dpy, cfg_attr, &cfg, 1, &n);
+    const EGLint pb_attr[] = {EGL_WIDTH, width, EGL_HEIGHT, height, EGL_NONE};
+    g_surf = eglCreatePbufferSurface(g_dpy, cfg, pb_attr);
+    if (g_surf == EGL_NO_SURFACE || !eglMakeCurrent(g_dpy, g_surf, g_surf, g_ctx)) {
+        LOGE("gl_resize: could not create a %dx%d surface: 0x%X", width, height, eglGetError());
+        return false;
+    }
+    g_w = width;
+    g_h = height;
+    return true;
+}
 
 // An off-screen surface never blocks on swap, so the software rasterizer would
 // fall seconds behind the game. Wait for the frame like a real display does.
 void gl_swap() {
     eglSwapBuffers(g_dpy, g_surf);
     glFinish();
+    g_frames_swapped++;
 }
 
 void* gl_get_proc(const char* name) { return (void*)eglGetProcAddress(name); }

@@ -32,4 +32,8 @@ bool run();
 enum class LibraryCheck { Tested, AsExtracted, Changed, Unknown };
 LibraryCheck check_library(const std::string& name, u64 size, u32 crc, u32* recorded_crc = nullptr);
 
+// Unpack a zip "deflate" stream (no zlib header) of known size; false if it
+// does not unpack to exactly out_len bytes.
+bool inflate_raw(const void* in, size_t in_len, void* out, size_t out_len);
+
 }  // namespace game::setup

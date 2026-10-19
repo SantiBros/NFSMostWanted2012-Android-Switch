@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <future>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -38,7 +39,9 @@ void queue_read_ahead(Backing* b, uint64_t idx);
 struct Backing {
     std::string path;
     FILE* file = nullptr;  // only used under io_mutex
-    uint64_t size = 0;
+    uint64_t size = 0;       // as the game sees it: real_size + tail
+    uint64_t real_size = 0;  // on the card
+    std::string tail;        // bytes after the real file (see set_tail)
     uint64_t blocks_total = 0;
     std::mutex io_mutex;
 
@@ -105,9 +108,15 @@ struct Backing {
             std::shared_ptr<uint8_t[]> data(new (std::nothrow) uint8_t[want]);
             size_t got = 0;
             const uint64_t t0 = now_ns();
-            if (data) {
+            // The part on the card, then the part from the tail.
+            const uint32_t from_file = start < real_size ? (uint32_t)std::min<uint64_t>(want, real_size - start) : 0;
+            if (data && from_file) {
                 std::lock_guard io(io_mutex);
-                if (fseeko(file, (off_t)start, SEEK_SET) == 0) got = std::fread(data.get(), 1, want, file);
+                if (fseeko(file, (off_t)start, SEEK_SET) == 0) got = std::fread(data.get(), 1, from_file, file);
+            }
+            if (data && got == from_file && want > from_file) {
+                std::memcpy(data.get() + from_file, tail.data() + (start + from_file - real_size), want - from_file);
+                got = want;
             }
             const uint64_t t1 = now_ns();
             lk.lock();
@@ -154,6 +163,7 @@ struct Backing {
 
 std::mutex g_mutex;
 std::unordered_map<std::string, std::unique_ptr<Backing>> g_backings;
+std::unordered_map<std::string, std::shared_future<std::string>> g_tails;  // guarded by g_mutex
 
 // The read-ahead thread and its queue (blocks are read in the order asked).
 std::mutex g_ahead_mutex;
@@ -268,7 +278,9 @@ FILE* open(const std::string& host_path) {
             auto nb = std::make_unique<Backing>();
             nb->path = host_path;
             nb->file = f;
-            nb->size = (uint64_t)ftello(f);
+            nb->real_size = (uint64_t)ftello(f);
+            if (auto t = g_tails.find(host_path); t != g_tails.end()) nb->tail = t->second.get();
+            nb->size = nb->real_size + nb->tail.size();
             nb->blocks_total = (nb->size + kBlock - 1) / kBlock;
             slot = std::move(nb);
             LOGI("OBB cache: %s (%llu MiB) is read through a %llu MiB memory cache", host_path.c_str(),
@@ -295,6 +307,32 @@ FILE* open(const std::string& host_path) {
     if (unbuffered) setvbuf(f, nullptr, _IONBF, 0);
     else setvbuf(f, nullptr, _IOFBF, kStdioBuffer);
     return f;
+}
+
+void set_tail(const std::string& host_path, std::function<std::string()> build) {
+    std::packaged_task<std::string()> task(std::move(build));
+    std::shared_future<std::string> fut = task.get_future().share();
+    {
+        std::lock_guard lk(g_mutex);
+        g_tails[host_path] = fut;
+    }
+    platform::detach_thread(platform::spawn_thread(
+        [t = std::make_shared<std::packaged_task<std::string()>>(std::move(task))] {
+            platform::set_thread_name("obb-patch");
+            (*t)();
+        },
+        256 * 1024));
+}
+
+uint64_t tail_size(const std::string& host_path) {
+    std::shared_future<std::string> fut;
+    {
+        std::lock_guard lk(g_mutex);
+        auto t = g_tails.find(host_path);
+        if (t == g_tails.end()) return 0;
+        fut = t->second;
+    }
+    return fut.get().size();
 }
 
 Stats stats() {

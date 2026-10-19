@@ -250,6 +250,35 @@ bool gl_init(int width, int height) {
 
 void gl_swap() { eglSwapBuffers(g_dpy, g_surf); }
 
+namespace {
+int g_swap_interval = 1;  // re-applied to a re-created surface
+}
+
+bool gl_resize(int width, int height) {
+    NWindow* win = nwindowGetDefault();
+    u32 old_w = 0, old_h = 0;
+    nwindowGetDimensions(win, &old_w, &old_h);
+    eglMakeCurrent(g_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglDestroySurface(g_dpy, g_surf);
+    g_surf = EGL_NO_SURFACE;
+    nwindowReleaseBuffers(win);  // the surface's buffers: the window can change size again
+    Result rc = nwindowSetDimensions(win, width, height);
+    if (R_SUCCEEDED(rc)) g_surf = eglCreateWindowSurface(g_dpy, g_cfg, (EGLNativeWindowType)win, nullptr);
+    const bool ok = R_SUCCEEDED(rc) && g_surf != EGL_NO_SURFACE;
+    if (!ok) {
+        LOGW("display: could not re-create the window at %dx%d (0x%X, EGL 0x%X); keeping %ux%u", width, height, rc,
+             eglGetError(), old_w, old_h);
+        if (g_surf != EGL_NO_SURFACE) eglDestroySurface(g_dpy, g_surf);
+        nwindowReleaseBuffers(win);
+        nwindowSetDimensions(win, old_w, old_h);
+        g_surf = eglCreateWindowSurface(g_dpy, g_cfg, (EGLNativeWindowType)win, nullptr);
+    }
+    if (g_surf == EGL_NO_SURFACE || !eglMakeCurrent(g_dpy, g_surf, g_surf, g_ctx))
+        fatal("The display could not be set up again after docking or undocking (EGL 0x%X).", eglGetError());
+    eglSwapInterval(g_dpy, g_swap_interval);
+    return ok;
+}
+
 int gl_set_swap_interval(int interval) {
     EGLint lo = 0, hi = 1;
     eglGetConfigAttrib(g_dpy, g_cfg, EGL_MIN_SWAP_INTERVAL, &lo);
@@ -259,6 +288,7 @@ int gl_set_swap_interval(int interval) {
         LOGW("eglSwapInterval(%d) failed: 0x%X", n, eglGetError());
         return 1;
     }
+    g_swap_interval = n;
     LOGI("swap interval %d (asked %d, driver allows %d-%d)", n, interval, lo, hi);
     return n;
 }

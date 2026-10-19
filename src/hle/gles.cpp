@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "game/controller_art.h"
 #include "hle/gl_queue.h"
 #include "hle/hle.h"
 #include "platform/platform.h"
@@ -367,7 +368,7 @@ void m_glGetVertexAttribPointerv(u32 index, u32 pname, u32 out) {
     glq::sync([&] { p(index, pname, &hp); });
     mem::w32(out, mem::is_guest(hp) ? mem::guest(hp) : (u32)(uintptr_t)hp);
 }
-// ---- 3D scene resolution ----------------------------------------------------
+// ---- 3D scene resolution, and the output resolution ------------------------
 // In races the game draws the 3D scene into its own off-screen framebuffer,
 // the size of the screen, then copies it to the screen and draws the HUD on
 // top. The scene can be drawn at a lower resolution by making that
@@ -376,9 +377,20 @@ void m_glGetVertexAttribPointerv(u32 index, u32 pname, u32 out) {
 // them is bound. The copy to the screen samples the smaller texture with
 // filtering, so the HUD and menus stay at full resolution. The game never
 // notices: glGetIntegerv still reports the rectangles it set.
+//
+// The same scaling lets the screen itself change size while the game runs
+// (docking / undocking, 0.3.0). The game keeps the size it started with (its
+// "screen"): it reads it once and cannot change it. The real screen (the
+// window, framebuffer 0) is re-created at the new size, and everything drawn
+// to it is scaled by the output factor (real / game size); screen-size render
+// targets by output factor x 3D scene scale. A game started handheld and then
+// docked draws at 1920x1080 for real, not a 1280x720 picture blown up, and a
+// game started docked and then undocked draws at 1280x720 again.
 namespace scene {
-int g_screen_w = 0, g_screen_h = 0;
-float g_scale = 1.f;
+int g_screen_w = 0, g_screen_h = 0;  // the game's screen (its size at start-up)
+float g_scale = 1.f;                 // 3D scene resolution (debug menu)
+float g_out = 1.f;                   // real screen / game screen
+float g_rect_f = 1.f;                // factor for the bound framebuffer's rectangles
 std::atomic<int> g_trace{0};  // debug command "fbtrace": log framebuffer use
 
 struct TexInfo {
@@ -436,13 +448,15 @@ void untarget(u32 id, bool is_rb) {
     } while (0)
 
 bool screen_sized(s32 w, s32 h) { return g_screen_w > 0 && w == g_screen_w && h == g_screen_h; }
-s32 sc(s32 v) { return (s32)std::lround(v * g_scale); }
-s32 scaled_w() { return std::max(1, sc(g_screen_w)); }
-s32 scaled_h() { return std::max(1, sc(g_screen_h)); }
+float target_factor() { return g_scale * g_out; }
+s32 scl(s32 v, float f) { return (s32)std::lround(v * f); }
+s32 sc(s32 v) { return scl(v, g_rect_f); }  // a coordinate in the bound framebuffer
+s32 scaled_w() { return std::max(1, scl(g_screen_w, target_factor())); }
+s32 scaled_h() { return std::max(1, scl(g_screen_h, target_factor())); }
 
 using RectFn = void (*)(GLint, GLint, GLsizei, GLsizei);
 void apply_rect(RectFn fn, const GLint* r) {
-    if (!g_scaled_now || g_scale == 1.f) return glq::call(fn, r[0], r[1], r[2], r[3]);
+    if (g_rect_f == 1.f) return glq::call(fn, r[0], r[1], r[2], r[3]);
     s32 x0 = sc(r[0]), y0 = sc(r[1]);
     glq::call(fn, x0, y0, sc(r[0] + r[2]) - x0, sc(r[1] + r[3]) - y0);
 }
@@ -454,9 +468,10 @@ void reapply_rects() {
 }
 void update_bound() {
     auto it = g_fbo_scaled.find(g_bound_fbo);
-    bool s = g_bound_fbo != 0 && it != g_fbo_scaled.end() && it->second != 0;
-    if (s != g_scaled_now) {
-        g_scaled_now = s;
+    g_scaled_now = g_bound_fbo != 0 && it != g_fbo_scaled.end() && it->second != 0;
+    const float f = g_bound_fbo == 0 ? g_out : g_scaled_now ? target_factor() : 1.f;
+    if (f != g_rect_f) {
+        g_rect_f = f;
         reapply_rects();
     }
 }
@@ -484,18 +499,34 @@ void alloc_rb(u32 id, const RbInfo& r) {
     glq::call(bind, GL_RENDERBUFFER, g_bound_rb);
 }
 
-void set_scale(float s) {
-    s = std::clamp(s, 0.25f, 1.f);
-    if (s == g_scale) return;
-    g_scale = s;
+// After a change of scale: the render targets at their new size, and the
+// rectangles of the bound framebuffer again.
+int resize_targets() {
     int n = 0;
     for (auto& [id, t] : g_tex)
         if (t.target) alloc_tex(id, t), n++;
     for (auto& [id, r] : g_rb)
         if (r.target) alloc_rb(id, r), n++;
-    reapply_rects();
+    g_rect_f = 0.f;  // makes update_bound re-apply them
+    update_bound();
+    return n;
+}
+
+void set_scale(float s) {
+    s = std::clamp(s, 0.25f, 1.f);
+    if (s == g_scale) return;
+    g_scale = s;
+    const int n = resize_targets();
     LOGI("3D scene resolution: %d%% (%dx%d), %d render targets resized", (int)std::lround(s * 100), scaled_w(),
          scaled_h(), n);
+}
+
+void set_output(float o) {
+    if (o <= 0.f || o == g_out) return;
+    g_out = o;
+    const int n = resize_targets();
+    LOGI("output: the game's %dx%d screen is drawn at %dx%d (x%.3f), 3D scene %dx%d, %d render targets resized",
+         g_screen_w, g_screen_h, scl(g_screen_w, o), scl(g_screen_h, o), o, scaled_w(), scaled_h(), n);
 }
 }  // namespace scene
 
@@ -623,6 +654,9 @@ void m_glTexImage2D(u32 target, s32 level, s32 ifmt, s32 w, s32 h, s32 border, u
             scene::untarget(id, false);
         }
     }
+    // The controls page's picture of the controller (game/controller_art.h).
+    if (target == GL_TEXTURE_2D && level == 0 && px && fmt == GL_RGBA && type == GL_UNSIGNED_BYTE && w >= 1000)
+        game::controller_art::patch_texture(mem::ptr<u8>(px), w, h);
     struct Args {
         GLenum target;
         GLint level, ifmt;
@@ -703,7 +737,7 @@ void m_glFramebufferTexture2D(u32 target, u32 att, u32 textarget, u32 tex, s32 l
             });
             it->second.mag_filter = mag;
         }
-        if (scene::g_scale != 1.f) scene::alloc_tex(tex, it->second);
+        if (scene::target_factor() != 1.f) scene::alloc_tex(tex, it->second);
         LOGI("3D scene: texture %u (%dx%d) is a screen-size render target of framebuffer %u", tex, it->second.w,
              it->second.h, scene::g_bound_fbo);
     }
@@ -718,7 +752,7 @@ void m_glFramebufferRenderbuffer(u32 target, u32 att, u32 rbtarget, u32 rb) {
     bool sized = rb && it != scene::g_rb.end() && scene::screen_sized(it->second.w, it->second.h);
     if (sized && !it->second.target) {
         it->second.target = true;
-        if (scene::g_scale != 1.f) scene::alloc_rb(rb, it->second);
+        if (scene::target_factor() != 1.f) scene::alloc_rb(rb, it->second);
         LOGI("3D scene: renderbuffer %u (%dx%d) is a screen-size render target of framebuffer %u", rb, it->second.w,
              it->second.h, scene::g_bound_fbo);
     }
@@ -747,13 +781,20 @@ void m_glCopyTexSubImage2D(u32 target, s32 level, s32 xo, s32 yo, s32 x, s32 y, 
     LOAD(glCopyTexSubImage2D);
     GL_TRACE("glCopyTexSubImage2D");
     FBLOG("fb: copytexsubimage %d %d %dx%d", x, y, w, h);
-    // Copies from a scaled framebuffer into a scaled render target keep both
-    // at the scaled size. (Any other copy is passed on unchanged; the game
-    // makes none.)
-    if (scene::g_scaled_now && scene::g_scale != 1.f && target == GL_TEXTURE_2D) {
+    // Copies from a scaled framebuffer into a render target scaled the same
+    // way keep both at the scaled size. (Any other copy is passed on
+    // unchanged; the game makes none.)
+    if (scene::g_rect_f != 1.f && target == GL_TEXTURE_2D) {
         auto it = scene::g_tex.find(scene::g_bound_tex[scene::g_unit]);
-        if (it != scene::g_tex.end() && it->second.target)
+        const float dst = it != scene::g_tex.end() && it->second.target ? scene::target_factor() : 1.f;
+        if (dst == scene::g_rect_f)
             xo = scene::sc(xo), yo = scene::sc(yo), x = scene::sc(x), y = scene::sc(y), w = scene::sc(w), h = scene::sc(h);
+        else {
+            static std::atomic<bool> once{false};
+            if (!once.exchange(true))
+                LOGW("glCopyTexSubImage2D from a framebuffer drawn x%.3f into a texture at x%.3f: copied unscaled",
+                     scene::g_rect_f, dst);
+        }
     }
     glq::call(p, target, level, xo, yo, x, y, w, h);
 }
@@ -761,6 +802,10 @@ void m_glReadPixels(s32 x, s32 y, s32 w, s32 h, u32 fmt, u32 type, u32 px) {
     LOAD(glReadPixels);
     GL_TRACE("glReadPixels");
     FBLOG("fb: readpixels %d %d %dx%d", x, y, w, h);
+    if (scene::g_rect_f != 1.f) {
+        static std::atomic<bool> once{false};
+        if (!once.exchange(true)) LOGW("glReadPixels from a framebuffer drawn x%.3f: read unscaled", scene::g_rect_f);
+    }
     glq::call_sync_void(p, x, y, w, h, fmt, type, mem::ptr<void>(px));
 }
 void m_glGetIntegerv(u32 pname, u32 out) {
@@ -1021,6 +1066,11 @@ void gl_set_screen_size(int w, int h) {
     scene::g_screen_h = h;
 }
 void gl_set_scene_scale(float s) { scene::set_scale(s); }
+void gl_set_output_size(int w, int h) {
+    (void)h;
+    if (scene::g_screen_w > 0) scene::set_output((float)w / (float)scene::g_screen_w);
+}
+float gl_output_scale() { return scene::g_out; }
 float gl_scene_scale() { return scene::g_scale; }
 bool gl_scene_scaled_targets() {
     for (auto& [id, t] : scene::g_tex)

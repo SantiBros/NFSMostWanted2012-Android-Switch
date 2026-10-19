@@ -84,7 +84,6 @@ std::string mhz_text(int khz) {
 }
 
 void build_items() {
-    const auto& S = game::settings();
     const bool docked = platform::is_docked();
     g_items.clear();
 
@@ -105,10 +104,12 @@ void build_items() {
 
     Item res{Kind::Setting, "3D resolution"};
     res.field_int = &Values::scene_scale;
+    int ow, oh;
+    perf::output_size(ow, oh);  // the real screen (it changes when docking / undocking)
     for (int pct : {100, 90, 80, 75, 67, 50}) {
         char t[48];
-        std::snprintf(t, sizeof t, "%d%%  (%dx%d)", pct, (int)std::lround(S.width * pct / 100.0),
-                      (int)std::lround(S.height * pct / 100.0));
+        std::snprintf(t, sizeof t, "%d%%  (%dx%d)", pct, (int)std::lround(ow * pct / 100.0),
+                      (int)std::lround(oh * pct / 100.0));
         res.choices.push_back({pct, t, pct <= 67 ? "Noticeably blurrier 3D scene." : ""});
     }
     res.help = "Resolution of the race scene. Lower = less work for the GPU; menus and the HUD stay sharp. "

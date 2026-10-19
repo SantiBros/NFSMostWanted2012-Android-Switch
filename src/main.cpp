@@ -26,6 +26,7 @@
 #include "game/paths.h"
 #include "game/setup.h"
 #include "game/native.h"
+#include "game/obb_patch.h"
 #include "game/perf.h"
 #include "game/prefs.h"
 #include "game/ui_nav.h"
@@ -195,6 +196,7 @@ int main(int argc, char** argv) {
         if (n != sizeof sig || sig[0] != 'P' || sig[1] != 'K')
             fatal("%s is not a valid OBB: it must be the original file (a zip archive), not extracted or converted",
                   game::paths::display(obb).c_str());
+        game::obb_patch::start(obb);  // texts that say "Switch" instead of "MOGA" (in memory, in the background)
     }
     crash::test_point("libs");
     elf::relocate_all();
@@ -278,12 +280,13 @@ int main(int argc, char** argv) {
     if (S.screenshot_every) ::mkdir(S.screenshot_dir.c_str(), 0755);
     bool started = false;
     auto t_start = std::chrono::steady_clock::now();
-    // The game reads its view size once, at start-up, and cannot change it later
-    // (verified: after a full context re-creation at the new size it keeps
-    // drawing the old view). So the resolution is chosen at launch - 720p
-    // handheld, 1080p docked - and kept if the console is docked or undocked
-    // while playing. The Switch display hardware scales the picture to fit the
-    // new screen; restarting the game gives the native resolution again.
+    // The game reads its view size once, at start-up, and cannot change it
+    // later (verified: after a full context re-creation at the new size it
+    // keeps drawing the old view). Since 0.3.0 the loader changes the real
+    // screen instead when the console is docked or undocked: the window is
+    // re-created at the new size (720p handheld, 1080p docked) and everything
+    // the game draws is scaled to it (hle::gl_set_output_size), so the game
+    // renders at the new resolution without knowing it.
     int mode_w = S.width, mode_h = S.height;
     int prof_frames = 0;
     double prof_tick = 0, prof_cpu = 0;
@@ -297,14 +300,23 @@ int main(int argc, char** argv) {
             int want_w = S.width, want_h = S.height;
             platform::preferred_display_size(want_w, want_h);
             if (want_w != mode_w || want_h != mode_h) {
-                mode_w = want_w;
-                mode_h = want_h;
-                if (want_w == S.width && want_h == S.height)
-                    LOGI("display: back to %dx%d, native resolution again", S.width, S.height);
-                else
-                    LOGI("display: console switched to a %dx%d mode; still rendering %dx%d (scaled by the "
-                         "console). Restart the game for native %dx%d.",
-                         want_w, want_h, S.width, S.height, want_w, want_h);
+                const auto t0 = std::chrono::steady_clock::now();
+                bool ok = false;
+                hle::glq::sync([&] { ok = platform::gl_resize(want_w, want_h); });
+                if (ok) {
+                    mode_w = want_w;
+                    mode_h = want_h;
+                    hle::gl_set_output_size(want_w, want_h);
+                    game::perf::set_output_size(want_w, want_h);
+                    LOGI("display: now %dx%d (the game's screen stays %dx%d and is drawn at the new size), %.0f ms",
+                         want_w, want_h, S.width, S.height,
+                         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+                } else {
+                    // Keep the current size; the console scales the picture.
+                    // Try again only after the next change of mode.
+                    mode_w = want_w;
+                    mode_h = want_h;
+                }
             }
         }
         if (!started) {

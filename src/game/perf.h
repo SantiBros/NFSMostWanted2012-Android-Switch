@@ -8,6 +8,10 @@ namespace game::perf {
 
 // After the GL context exists: vsync, clocks, 3D resolution.
 void init(int screen_w, int screen_h);
+// The real screen after docking / undocking while playing (the game keeps the
+// size it started with; see hle::gl_set_output_size).
+void set_output_size(int w, int h);
+void output_size(int& w, int& h);
 // Re-apply the settings that work while playing (after a change in the menu).
 void apply();
 // Desktop --fps N: frame-rate limit for this run only (not saved).

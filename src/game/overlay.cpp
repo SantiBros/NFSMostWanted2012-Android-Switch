@@ -18,6 +18,7 @@
 #include "external/stb/stb_truetype.h"  // implementation is in hle/jni/text.cpp
 #include "game/paths.h"
 #include "hle/gl_queue.h"
+#include "hle/hle.h"
 #include "platform/platform.h"
 
 namespace game::overlay {
@@ -440,7 +441,8 @@ struct Op {
     Align align = Align::Left;
 };
 struct List {
-    int w = 0, h = 0;
+    int w = 0, h = 0;  // the game's screen: coordinates are in its pixels
+    float k = 1.f;     // real screen / game screen (docked or undocked while playing)
     std::vector<Op> ops;
     std::vector<float> verts;  // kVtx floats per vertex
     Clip clip;                 // current clip for new geometry
@@ -471,7 +473,9 @@ void render(List* list) {  // on the GL thread
         g_sh = list->h;
         save(g_saved);
         gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
-        gl.Viewport(0, 0, list->w, list->h);
+        const float k = list->k;
+        auto px = [k](float v) { return (int)std::lround(v * k); };  // game pixels -> real pixels
+        gl.Viewport(0, 0, px((float)list->w), px((float)list->h));
         gl.Disable(GL_DEPTH_TEST);
         gl.Disable(GL_CULL_FACE);
         gl.Disable(GL_SCISSOR_TEST);
@@ -491,24 +495,28 @@ void render(List* list) {  // on the GL thread
                 scissor_on = op.clip.on;
             }
             if (op.clip.on)  // GL's origin is bottom-left
-                gl.Scissor(op.clip.x0, list->h - op.clip.y1, std::max(0, op.clip.x1 - op.clip.x0),
-                           std::max(0, op.clip.y1 - op.clip.y0));
+                gl.Scissor(px((float)op.clip.x0), px((float)(list->h - op.clip.y1)),
+                           std::max(0, px((float)op.clip.x1) - px((float)op.clip.x0)),
+                           std::max(0, px((float)op.clip.y1) - px((float)op.clip.y0)));
             if (op.kind == Op::Tris) {
                 draw_color_tris(list->verts.data() + op.first * kVtx, op.count);
             } else {
-                const TextTex* tt = text_texture(op.text, op.px);
+                // Rendered at the real screen's size, so text stays sharp
+                // when the picture is scaled.
+                const TextTex* tt = text_texture(op.text, op.px * k);
                 if (!tt) continue;
-                float left = op.align == Align::Center ? op.x - tt->width / 2
-                             : op.align == Align::Right ? op.x - tt->width
+                const float width = tt->width / k, ascent = tt->ascent / k;
+                float left = op.align == Align::Center ? op.x - width / 2
+                             : op.align == Align::Right ? op.x - width
                                                         : op.x;
-                float top = op.y - tt->ascent;  // y is the baseline
-                left = std::round(left);
-                top = std::round(top);
+                float top = op.y - ascent;  // y is the baseline
+                left = std::round(left * k) / k;  // on whole real pixels
+                top = std::round(top * k) / k;
                 gl.BindTexture(GL_TEXTURE_2D, tt->tex);
                 gl.UseProgram(g_text_prog);
                 gl.Uniform1i(g_tu_tex, 0);
                 std::vector<float> v;
-                add_quad(v, left - 1, top, left - 1 + tt->w, top + tt->h);
+                add_quad(v, left - 1 / k, top, left - 1 / k + tt->w / k, top + tt->h / k);
                 draw_text_tris(v, op.c);
             }
         }
@@ -524,6 +532,7 @@ bool begin(int screen_w, int screen_h) {
     g_list = new List;
     g_list->w = screen_w;
     g_list->h = screen_h;
+    g_list->k = hle::gl_output_scale();
     return true;
 }
 

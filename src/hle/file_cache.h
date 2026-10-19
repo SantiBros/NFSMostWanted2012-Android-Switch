@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <string>
 
 namespace hle::filecache {
@@ -27,6 +28,14 @@ namespace hle::filecache {
 // A read-only FILE* for host_path that reads through the cache, or nullptr
 // (the caller then opens the file normally).
 FILE* open(const std::string& host_path);
+
+// Bytes the game sees after the end of host_path (0.3.0: the OBB with some
+// entries replaced, see game/obb_patch.h). Built by `build` on a background
+// thread; the first open() of the file waits for it. Register before the
+// game opens the file.
+void set_tail(const std::string& host_path, std::function<std::string()> build);
+// Size of that tail (0 if none): stat() reports the file this much larger.
+uint64_t tail_size(const std::string& host_path);
 
 struct Stats {
     uint64_t reads = 0;        // block lookups (reads within a stream's current block are not counted)

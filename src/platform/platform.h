@@ -44,8 +44,13 @@ bool finish_setup_screen(const std::string& self_nro, bool may_restart);
 // current on the calling thread. Returns false on failure.
 bool gl_init(int width, int height);
 // The display size that suits the console's current mode. Switch: 1280x720
-// handheld, 1920x1080 docked. Desktop: leaves the values unchanged.
+// handheld, 1920x1080 docked. Desktop: leaves the values unchanged (or follows
+// NFSMW_TEST_DOCK, for tests).
 void preferred_display_size(int& width, int& height);
+// On the GL thread: re-create the window surface at a new size, keeping the
+// context (and so every texture and shader). False if that failed; the old
+// size is then kept.
+bool gl_resize(int width, int height);
 void gl_swap();
 void* gl_get_proc(const char* name);
 // Threaded GL (hle/gl_queue): give up the context on the calling thread, and

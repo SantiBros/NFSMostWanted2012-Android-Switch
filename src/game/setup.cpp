@@ -474,6 +474,12 @@ struct Source {
 
 }  // namespace
 
+bool inflate_raw(const void* in, size_t in_len, void* out, size_t out_len) {
+    if (in_len > 0x7FFFFFFF || out_len > 0x7FFFFFFF) return false;
+    return stbi_zlib_decode_noheader_buffer(static_cast<char*>(out), (int)out_len, static_cast<const char*>(in),
+                                            (int)in_len) == (int)out_len;
+}
+
 LibraryCheck check_library(const std::string& name, u64 size, u32 crc, u32* recorded_crc) {
     for (const TestedLib& t : kTested)
         if (name == t.name && size == t.size && crc == t.crc) return LibraryCheck::Tested;
