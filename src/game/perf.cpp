@@ -16,6 +16,7 @@
 #include "hle/hle.h"
 #include "core/jit_cache.h"
 #include "dynarmic/interface/compile_stats.h"
+#include "platform/thread.h"
 #include "platform/platform.h"
 
 namespace game::perf {
@@ -84,8 +85,10 @@ void log_summary() {
         if (total) std::snprintf(memory, sizeof memory, "memory %llu of %llu MiB", (unsigned long long)(used >> 20), (unsigned long long)(total >> 20));
         else std::snprintf(memory, sizeof memory, "memory %llu MiB", (unsigned long long)(used >> 20));
     }
+    // Threads not yet released (the Switch allows an application 96).
+    const std::string threads = "threads " + std::to_string(platform::live_threads());
     std::string extra;
-    for (const std::string& part : {std::string(jit), jit_cache::summary(), hle::filecache::summary(), audio::summary(), std::string(memory)})
+    for (const std::string& part : {std::string(jit), jit_cache::summary(), hle::filecache::summary(), audio::summary(), std::string(memory), threads})
         if (!part.empty()) extra += " | " + part;
     LOGI("perf: %.1f fps (frame %.1f ms, slowest %.0f ms, %d hitches) | game %.1f ms/frame | GL thread %.0f%% busy, "
          "waited %.1f ms/frame, swap %.1f ms/frame | %.0f GL calls | %s %dx%d, detail %s, limit %s, vsync %s | %s | %s%s",

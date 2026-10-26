@@ -235,6 +235,15 @@ When you report a problem, attach log.txt from this folder.
 
 WHAT'S NEW
 ----------
+0.3.1
+  * Fixed: after a long session (about an hour, sooner when browsing many
+    cars), cars stopped appearing in the garage and the next race stayed on
+    a black screen. The game starts a thread for every car it shows and
+    every loading screen, and the Switch allows a game 96 threads; the port
+    did not give finished threads back. It now releases each one as soon as
+    it ends.
+  * log.txt's "perf:" lines end with the number of threads running.
+
 0.3.0
   * Dock and undock while you play: the port switches to the new
     resolution right away (720p handheld, 1080p docked), 3D scene included.

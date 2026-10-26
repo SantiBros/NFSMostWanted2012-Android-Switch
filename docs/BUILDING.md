@@ -67,6 +67,9 @@ to those frames (the race clip in the README: `--screenshot-every 1`). The contr
 writes `src/game/controller_art_images.inc`; `--preview DIR` also saves them as PNG files. `NFSMW_TEST_SLOT_NULL=1` checks the 0.3.0 game fix for
 the per-frame value store: about 900 frames in, it calls that function with a slot taken away
 (with `NFSMW_NO_SLOT_FIX=1` as well, the game crashes there, as it did before the fix).
+`NFSMW_THREAD_LIMIT=96` refuses new threads past that number, as the Switch does, and
+`NFSMW_NO_THREAD_REAP=1` never releases detached threads, as up to 0.3.0 on the Switch: together
+they reproduce the 0.3.0 garage bug on the desktop (a car that never loads after enough loads).
 `-DNFSMW_SWITCH_TEST=ON` builds with the Switch memory/JIT model. The ARM64 cross build
 (`cmake/aarch64-linux.cmake`, `-DNFSMW_NO_GL=ON`) runs under `qemu-aarch64`.
 

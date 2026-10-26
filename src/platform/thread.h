@@ -18,7 +18,12 @@ void boost_current_thread();
 // Keep the game's worker threads off this core from now on (Switch: the GL
 // thread gets core 2 to itself; the game's threads then use core 1).
 void reserve_core_for_gl(int core);
-void detach_thread(ThreadHandle* t);  // frees the handle without waiting
+// Frees the handle without waiting; the thread itself is released (joined)
+// once it has finished, at the next spawn_thread or detach_thread (libnx has
+// no pthread_detach, and the Switch allows an application 96 threads).
+void detach_thread(ThreadHandle* t);
+// Threads started and not yet released, the main thread included.
+int live_threads();
 
 // CPU time the calling thread has used so far, in nanoseconds.
 unsigned long long thread_cpu_ns();

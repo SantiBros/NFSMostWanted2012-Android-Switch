@@ -2,6 +2,25 @@
 
 All notable changes to the port. The release zip's `README.txt` carries the same list.
 
+## [0.3.1]
+
+### Fixed
+- **After a long session, cars stopped appearing in the garage, and then the next race stayed on
+  a black screen.** Reported with a `log.txt` from about an hour of play. The game starts a new
+  thread for every car the garage shows and for every loading screen. The Switch gives a game 96
+  threads, and a thread gives its place back only when it is released. The Switch's homebrew
+  library can't release a thread by itself (`pthread_detach` does nothing there), and the port
+  relied on it, so every finished thread kept its place, and its 1 MiB of memory, until the game
+  was closed. In the report, after 88 of the game's threads and the port's own 8, no new thread
+  could start: the car being loaded never showed, and the next race never loaded. The port now
+  releases each thread as soon as it has finished, so the count stays the same however long you
+  play. Every version up to 0.3.0 had this; browsing many cars in the garage brought it on sooner.
+
+### Changed
+- The `perf:` lines in `log.txt` end with the number of threads the port has running
+  (`threads 10`), so a report shows at once if threads ever pile up again.
+- As after every update, the first start rebuilds the JIT cache.
+
 ## [0.3.0]
 
 ### Added

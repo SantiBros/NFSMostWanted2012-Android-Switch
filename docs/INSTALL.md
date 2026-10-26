@@ -173,7 +173,7 @@ icon** from your APK, so the Homebrew Menu shows the Need for Speed icon (needs
 With the SD card as drive `E:` (all on one line):
 
 ```
-python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.3.0.nro --out E:\switch\NFSMostWanted2012
+python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.3.1.nro --out E:\switch\NFSMostWanted2012
 ```
 
 macOS / Linux: `python3 prepare_sd.py ... --out /Volumes/SD/switch/NFSMostWanted2012`.
@@ -192,6 +192,7 @@ The script checks your files and says what it did: `libapp.so sha256 a73dcc17...
 | **"Please start the Homebrew Menu in title-takeover mode"** | Hold **R** while launching a game, then open the port. See [Starting the game](#starting-the-game). |
 | **"A game file is damaged"** | One of the game's libraries in `game/lib/` was cut off or damaged (an interrupted copy, or an SD card error). The port has already deleted it: put your APK back into `game/` and start again, and it takes a fresh copy out of it. If this keeps happening, check your SD card on a computer. |
 | **The game closes right after it starts** | Update to 0.2.8 or later: it fixes a crash at start-up that happened on some consoles. If it still closes, look at the end of `log.txt`: since 0.2.8 a `CRASH` section, or a line marked `E/`, says what happened. Make sure you started in title-takeover mode (**R + a game**). Then please [report](#reporting-a-bug) it with `log.txt`. |
+| **After a long session, a car doesn't appear in the garage and then a race stays black** | Update to 0.3.1 or later. Up to 0.3.0 the port ran out of threads after about 90 car and race loads (about an hour of play, sooner when browsing many cars); `log.txt` then shows `pthread_create failed`. |
 | **The game crashes or the screen stays black** | In `settings.ini`, try `direct_memory=off`, then `gl_thread=off` (one at a time; each takes effect at the next start). |
 | **Low frame rate** | Open the debug menu (ZL + ZR + Minus) and set *Frame-rate counter: full*. `log.txt` gets a `perf:` line every 10 seconds that ends by naming what holds the frame rate back (game code, graphics driver or GPU). Raising the CPU clock helps when it says "game code". |
 | **Short stutters although the counter shows 30** | The `perf:` lines in `log.txt` count them ("hitches") and show how long the game waited for the SD card ("game waited"). Please [report](#reporting-a-bug) them with `log.txt`. A slow or nearly full SD card makes them worse. |

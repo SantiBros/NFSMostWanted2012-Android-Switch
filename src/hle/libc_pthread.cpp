@@ -285,14 +285,20 @@ int h_setspecific(u32 k, u32 v) {
 constexpr u32 ATTR_DETACHED = 1;
 constexpr u32 DEFAULT_STACK = 1024 * 1024;
 
+// A game thread runs on a host thread that is handed to platform::detach_thread
+// as soon as it starts, whatever the game asks for: the host thread is then
+// released when it ends (libnx cannot detach threads, and the Switch allows an
+// application 96 threads; see platform/thread.cpp). pthread_join waits for the
+// record's `done` instead of joining the host thread.
 struct ThreadRec {
     u32 id = 0;
-    platform::ThreadHandle* th = nullptr;
     u32 retval = 0;
-    bool detached = false;
+    bool detached = false;  // the game will not join it
+    bool done = false;      // its function has returned (retval is set)
     u32 stack_base = 0, stack_size = 0;
 };
-std::mutex g_threads_mutex;
+std::mutex g_threads_mutex;  // guards g_threads and every record's detached/done/retval
+std::condition_variable g_threads_done;
 std::unordered_map<u32, std::shared_ptr<ThreadRec>> g_threads;
 std::atomic<u32> g_next_id{2000};
 
@@ -365,7 +371,7 @@ int h_create(u32 out, u32 attr, u32 start, u32 arg) {
     mem::w32(out, rec->id);
     u32 id = rec->id;
     LOGD("pthread_create -> thread %u, entry %s", id, elf::describe(start).c_str());
-    rec->th = platform::spawn_thread([rec, id, start, arg, stack_size, stack_base] {
+    platform::ThreadHandle* th = platform::spawn_thread([rec, id, start, arg, stack_size, stack_base] {
         char name[16];
         std::snprintf(name, sizeof name, "guest-%u", id);
         platform::set_thread_name(name);
@@ -384,7 +390,6 @@ int h_create(u32 out, u32 attr, u32 start, u32 arg) {
             run_thread_cleanup(*t);
         } catch (const cpu::ThreadExit&) {
         }
-        rec->retval = ret;
         cpu::detach_current_thread();
         // What a thread's life cost (the game starts a new thread for each
         // loading screen, so these lines time the loads).
@@ -396,40 +401,44 @@ int h_create(u32 out, u32 attr, u32 start, u32 arg) {
                  id, secs, cpu_s, (double)cs.ns / 1e9, (unsigned long long)cs.blocks);
         else
             LOGD("thread %u finished", id);
+        {
+            std::lock_guard lk(g_threads_mutex);
+            rec->retval = ret;
+            rec->done = true;
+            if (rec->detached) g_threads.erase(id);  // nobody will join it
+        }
+        g_threads_done.notify_all();
     }, 1 << 20);
-    if (!rec->th) return EAGAIN_;
-    if (rec->detached) {
-        platform::detach_thread(rec->th);
-        rec->th = nullptr;
+    if (!th) {
+        std::lock_guard lk(g_threads_mutex);
+        g_threads.erase(id);
+        return EAGAIN_;
     }
+    platform::detach_thread(th);
     return 0;
 }
 int h_join(u32 id, u32 retval) {
-    std::shared_ptr<ThreadRec> rec;
+    if (cpu::current_or_null() && id == cpu::current().id) return 35;  // EDEADLK
+    u32 value;
     {
-        std::lock_guard lk(g_threads_mutex);
+        std::unique_lock lk(g_threads_mutex);
         auto it = g_threads.find(id);
         if (it == g_threads.end()) return 3;  // ESRCH
-        rec = it->second;
+        if (it->second->detached) return EINVAL_;
+        std::shared_ptr<ThreadRec> rec = it->second;
+        g_threads_done.wait(lk, [&] { return rec->done; });
+        value = rec->retval;
+        g_threads.erase(id);
     }
-    if (rec->th) {
-        platform::join_thread(rec->th);
-        rec->th = nullptr;
-    }
-    if (retval) mem::w32(retval, rec->retval);
-    std::lock_guard lk(g_threads_mutex);
-    g_threads.erase(id);
+    if (retval) mem::w32(retval, value);
     return 0;
 }
 int h_detach(u32 id) {
     std::lock_guard lk(g_threads_mutex);
     auto it = g_threads.find(id);
     if (it == g_threads.end()) return 3;
-    if (it->second->th) {
-        platform::detach_thread(it->second->th);
-        it->second->th = nullptr;
-    }
-    it->second->detached = true;
+    if (it->second->done) g_threads.erase(it);  // already finished: nothing left to keep
+    else it->second->detached = true;
     return 0;
 }
 u32 h_self() { return cpu::current().id; }

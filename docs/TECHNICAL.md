@@ -8,6 +8,7 @@ Building it is in [BUILDING.md](BUILDING.md).
 - [How it works](#how-it-works)
 - [What has been tested](#what-has-been-tested)
 - [Performance](#performance)
+- [Threads](#threads-031)
 - [Online services are blocked](#online-services-are-blocked)
 - [Resolution](#resolution)
 - [The Switch's buttons in the game's texts](#the-switchs-buttons-in-the-games-texts-030)
@@ -214,6 +215,21 @@ The defaults therefore leave all clocks at stock. If the frame-rate counter show
 below 30 fps on a console, the debug menu can raise the CPU clock (1224 MHz is a clock some
 Switch games use themselves). These numbers come from the desktop build; real hardware will
 tell how much headroom is left.
+
+## Threads (0.3.1)
+
+Each game thread runs on a host thread of its own (`src/hle/libc_pthread.cpp`), and the game
+starts one for every car the garage shows and every loading screen. The Switch allows an
+application 96 threads, counted until each thread is released, and a thread is released only
+by joining it: libnx implements no `pthread_detach` (newlib's returns `ENOSYS` and keeps the
+thread). Up to 0.3.0 the port detached the game's detached threads, so each one kept its
+kernel thread and its 1 MiB stack after it ended, and after about 90 car and track loads
+`pthread_create` failed (the car stayed missing, the next race never loaded). Now
+`platform::detach_thread` keeps finished-or-running detached threads in a list and the next
+`spawn_thread` or `detach_thread` joins the ones that have finished (`src/platform/thread.cpp`;
+the same code on the desktop). Every game thread's host thread goes on that list as soon as it
+starts; the game's `pthread_join` waits for the thread's record to be marked done instead of
+joining the host thread. The `perf:` lines end with the number of threads not yet released.
 
 ## Crash reports and library checks (0.2.8)
 

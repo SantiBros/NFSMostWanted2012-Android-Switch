@@ -178,7 +178,7 @@ Need for Speed (necesita `pip install pillow`). El `.nro` publicado nunca trae i
 Con la tarjeta SD como unidad `E:` (todo en una sola línea):
 
 ```
-python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.3.0.nro --out E:\switch\NFSMostWanted2012
+python prepare_sd.py --apk NFS_MW.apk --obb main.1003128.com.ea.games.nfs13_row.obb --nro E:\switch\NFSMostWanted2012\NFSMostWanted2012-0.3.1.nro --out E:\switch\NFSMostWanted2012
 ```
 
 En macOS / Linux: `python3 prepare_sd.py ... --out /Volumes/SD/switch/NFSMostWanted2012`.
@@ -199,6 +199,7 @@ Los mensajes del port salen en inglés; aquí está qué significan y qué hacer
 | **"Please start the Homebrew Menu in title-takeover mode"** | Mantén **R** al abrir un juego y luego abre el port. Ver [Abrir el juego](#abrir-el-juego). |
 | **"A game file is damaged"** (un archivo del juego está dañado) | Una de las bibliotecas del juego en `game/lib/` quedó cortada o dañada (una copia interrumpida o un error de la tarjeta SD). El port ya la borró: vuelve a poner tu APK en `game/` y ábrelo otra vez, y saca de ahí una copia nueva. Si pasa seguido, revisa tu tarjeta SD en una computadora. |
 | **El juego se cierra justo después de abrirlo** | Actualiza a la 0.2.8 o posterior: corrige un cierre al abrirlo que pasaba en algunas consolas. Si sigue cerrándose, mira el final de `log.txt`: desde la 0.2.8, una sección `CRASH` o una línea marcada `E/` dice qué pasó. Revisa que lo abras en modo title takeover (**R + un juego**). Luego, por favor, [repórtalo](#reportar-un-error) con `log.txt`. |
+| **Después de jugar un buen rato, un auto no aparece en el garaje y luego una carrera queda en negro** | Actualiza a la 0.3.1 o posterior. Hasta la 0.3.0 el port se quedaba sin hilos después de unas 90 cargas de autos y carreras (más o menos una hora de juego, antes si miras muchos autos); `log.txt` muestra entonces `pthread_create failed`. |
 | **El juego se cierra o la pantalla queda negra** | En `settings.ini`, prueba `direct_memory=off` y después `gl_thread=off` (de a uno; cada cambio se aplica al volver a abrirlo). |
 | **Pocos FPS** | Abre el menú de depuración (ZL + ZR + Menos) y pon *Frame-rate counter: full*. `log.txt` escribe cada 10 segundos una línea `perf:` que termina diciendo qué frena los FPS (código del juego, driver gráfico o GPU). Subir el reloj de la CPU ayuda cuando dice "game code". |
 | **Tirones cortos aunque el contador marca 30** | Las líneas `perf:` de `log.txt` los cuentan ("hitches") y muestran cuánto esperó el juego a la tarjeta SD ("game waited"). Por favor [repórtalos](#reportar-un-error) con `log.txt`. Una tarjeta SD lenta o casi llena los empeora. |
