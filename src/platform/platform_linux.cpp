@@ -378,7 +378,8 @@ std::string take_pending_screenshot() {
 
 // No clock control on the desktop (the settings are kept, not applied).
 bool clocks_supported() { return false; }
-void set_clocks(const Clocks&) {}
+bool system_status(SystemStatus&) { return false; }
+void set_clocks(const Clocks&, bool) {}
 bool get_clocks(Clocks&) { return false; }
 bool is_docked() { return false; }
 void tick() {}

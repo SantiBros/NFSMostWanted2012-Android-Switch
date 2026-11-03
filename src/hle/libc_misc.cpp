@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "core/elf.h"
+#include "game/perf.h"
 #include "hle/hle.h"
 
 namespace hle {
@@ -480,15 +481,25 @@ logging::Level log_level(int prio) {
     default: return prio >= 6 ? logging::Error : logging::Debug;
     }
 }
+// The game's loading screens: it logs "Lock: Is being locked. Lock count: 1"
+// when one starts and "Unlock: Is being unlocked. Lock count: 0" when it ends.
+void note_loading_lock(const std::string& s) {
+    static const char kLock[] = "Lock: Is being locked. Lock count: ";
+    static const char kUnlock[] = "Unlock: Is being unlocked. Lock count: ";
+    if (s.rfind(kLock, 0) == 0) game::perf::loading_screen(std::atoi(s.c_str() + sizeof kLock - 1));
+    else if (s.rfind(kUnlock, 0) == 0) game::perf::loading_screen(std::atoi(s.c_str() + sizeof kUnlock - 1));
+}
 int h_log_print(int prio, u32 tag, u32 fmt, abi::VarArgs va) {
     std::string s = format(str(fmt), va);
     while (!s.empty() && s.back() == '\n') s.pop_back();
+    if (prio == 5 && s.size() > 20 && (s[0] == 'L' || s[0] == 'U')) note_loading_lock(s);
     logging::write(log_level(prio), tag ? str(tag) : "?", "%s", s.c_str());
     return 1;
 }
 int h_log_write(int prio, u32 tag, u32 text) {
     std::string s = text ? str(text) : "";
     while (!s.empty() && s.back() == '\n') s.pop_back();
+    if (prio == 5 && s.size() > 20 && (s[0] == 'L' || s[0] == 'U')) note_loading_lock(s);
     logging::write(log_level(prio), tag ? str(tag) : "?", "%s", s.c_str());
     return 1;
 }

@@ -32,15 +32,22 @@ en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
 > PlayStation 3, Xbox 360, PS Vita, Wii U o iOS de Most Wanted (2012) no sirven.
 
 > [!TIP]
-> **Novedades de la 0.3.0**
-> - **Conecta o saca la consola del dock mientras juegas**: la resolución cambia al momento (720p en
->   modo portátil, 1080p en el dock).
-> - **Los botones de la Switch en el juego**: las páginas de controles y los tutoriales dicen +, −, A,
->   B, X, Y en vez de los botones del control MOGA, en los 11 idiomas, con nuevos dibujos de los
->   controles: una consola portátil en modo portátil y un control en el dock ([verlos](#controles)).
-> - **Corregido un cierre poco frecuente al cargar una carrera.**
+> **Novedades de la 0.3.1**
+> - **Los efectos de los celulares de gama alta**: neblina a lo lejos, calles mojadas y brillantes,
+>   reflejos en los autos, humo y el eco del motor en los túneles, ahora también en el nivel de detalle
+>   recomendado, casi sin costo ([verlo](#capturas)).
+> - **Antialiasing** (bordes más suaves, opcional) y **filtrado de texturas** (la calle se ve nítida a lo
+>   lejos).
+> - **Cargas más rápidas**: la CPU funciona a 1785 MHz mientras el juego carga, como hacen los juegos
+>   oficiales de Switch; las llamadas pequeñas más frecuentes del juego son más rápidas; y las
+>   actualizaciones ahora conservan la caché JIT.
+> - **Un menú de depuración más grande** (ZL + ZR + Menos) en cuatro páginas: rendimiento, gráficos,
+>   controles y sonido, e información en vivo (temperaturas, batería, tiempos de carga).
+> - **Corregido: después de una sesión larga, los autos dejaban de aparecer en el garaje y la
+>   siguiente carrera se quedaba en negro.**
 >
-> Todos los detalles están en el [registro de cambios](CHANGELOG.md) (en inglés).
+> La 0.3.0 trajo poner y sacar la consola del dock mientras juegas y los botones de la Switch en el
+> juego. Todos los detalles están en el [registro de cambios](CHANGELOG.md) (en inglés).
 
 ## Capturas
 
@@ -78,11 +85,19 @@ consola.</sub></p>
   </tr>
   <tr>
     <td><img src="docs/images/screenshots/pause-menu.jpg" alt="El menú de pausa durante una carrera"></td>
-    <td><img src="docs/images/screenshots/debug-menu.jpg" alt="El menú de depuración del port sobre el mapa"></td>
+    <td><img src="docs/images/screenshots/phone-effects.jpg" alt="Una carrera en nivel de detalle Medio con los efectos de celulares: neblina sobre la ciudad, la calle mojada y brillante"></td>
   </tr>
   <tr>
     <td align="center"><sub>El menú de pausa, en plena carrera</sub></td>
-    <td align="center"><sub>El menú de depuración del port (ZL + ZR + Menos): FPS, VSync, resolución 3D, relojes, sonido</sub></td>
+    <td align="center"><sub>Nuevo en la 0.3.1: los efectos de los celulares de gama alta (neblina, calle mojada) en el nivel de detalle recomendado</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshots/debug-menu.jpg" alt="El menú de depuración del port, página GRAPHICS"></td>
+    <td><img src="docs/images/screenshots/debug-menu-info.jpg" alt="El menú de depuración del port, página INFORMATION"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>El menú de depuración (ZL + ZR + Menos), página GRAPHICS: efectos de celulares, antialiasing, filtrado de texturas</sub></td>
+    <td align="center"><sub>Su página INFORMATION: FPS, relojes, temperaturas, batería, tiempos de carga (algunos solo en la consola)</sub></td>
   </tr>
 </table>
 
@@ -101,6 +116,11 @@ capturas de carrera es el tutorial del propio juego para manejar con control. M�
   ejecutar código de 64 bits ([por qué](#preguntas-frecuentes)).
 - **720p en modo portátil, 1080p en el dock, y puedes conectar o sacar la consola del dock mientras
   juegas.**
+- **Los efectos de un celular de gama alta, al costo de uno de gama media.** El juego les da a los
+  celulares rápidos neblina a lo lejos, calles mojadas y brillantes, reflejos en los autos, humo y el
+  eco del motor en los túneles; el port los activa en su nivel de detalle recomendado, sin los objetos
+  de más que hacen lento al nivel Alto del juego. Además, **antialiasing** y **filtrado de texturas**
+  opcionales, que ningún celular tuvo en este juego.
 - **Los botones de la Switch en el juego.** Las páginas de controles y los tutoriales nombran los
   botones de la Switch en vez del control MOGA para el que se hizo el juego, en los 11 idiomas. Las
   páginas de controles muestran dibujos propios del port con la distribución de botones de la
@@ -114,14 +134,18 @@ capturas de carrera es el tutorial del propio juego para manejar con control. M�
 - **A prueba de errores.** Si las librerías quedaron dentro de `lib/armeabi-v7a/`, la carpeta de
   assets en el lugar equivocado o el OBB con otro nombre, el port los mueve a su sitio solo.
 - **Más rápido cada vez que lo abres.** El port recuerda qué partes del código del juego ya tradujo
-  (la caché JIT) y desde entonces las traduce por adelantado: pantallas de carga más cortas y menos
-  tirones.
+  (la caché JIT, que se conserva al actualizar) y desde entonces las traduce por adelantado: pantallas
+  de carga más cortas y menos tirones. Mientras el juego carga, la CPU funciona a 1785 MHz, como hacen
+  los juegos oficiales de Switch.
 - **Totalmente sin conexión.** Todos los servicios en línea están bloqueados; la carrera, los autos
   y las partidas guardadas funcionan sin internet.
 - **Tu partida en un solo archivo** (`save/progress/nfstr_save.sb`): fácil de respaldar, y se
   conserva al actualizar.
-- **Menú de depuración** (ZL + ZR + Menos): límite de FPS, VSync, resolución 3D, nivel de detalle,
-  relojes de CPU / GPU / memoria, volumen del sonido y contador de FPS.
+- **Menú de depuración** (ZL + ZR + Menos), cuatro páginas que cambias con L / R: rendimiento (límite
+  de FPS, VSync, relojes de CPU / GPU / memoria, el impulso al cargar), gráficos (nivel de detalle,
+  efectos de celulares, antialiasing, filtrado de texturas, resolución 3D, contador de FPS), controles
+  y sonido (inclinación para girar, volumen) e información en vivo (relojes, temperaturas, batería,
+  tiempos de carga).
 - **Tres cierres inesperados del juego original, corregidos** en el port.
 
 ## Qué necesitas
@@ -144,7 +168,7 @@ capturas de carrera es el tutorial del propio juego para manejar con control. M�
 <img src="docs/images/install-steps.es.png" alt="Instalar en 4 pasos: descarga el zip, copia la carpeta switch a la SD, agrega tu APK y tu OBB a la carpeta game, abre con R + cualquier juego" width="100%">
 
 1. **Descarga.** En la página de [Releases](../../releases), en la sección **Assets**,
-   descarga `NFSMostWanted2012-0.3.0.zip` (no "Source code", que es solo para desarrolladores) y
+   descarga `NFSMostWanted2012-0.3.1.zip` (no "Source code", que es solo para desarrolladores) y
    descomprímelo en tu computadora.
 2. **Copia a la SD.** Copia la carpeta `switch` del zip a la raíz de tu tarjeta SD.
 3. **Agrega tu juego.** Copia tu APK y tu OBB en `switch/NFSMostWanted2012/game/`. No los
@@ -164,7 +188,7 @@ capturas de carrera es el tutorial del propio juego para manejar con control. M�
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.3.0.nro   el port
+├── NFSMostWanted2012-0.3.1.nro   el port
 ├── README.txt                    la guía del jugador (en inglés)
 ├── LICENSES.txt                  componentes de código abierto y sus licencias
 ├── game/                         TUS archivos del juego (nunca los compartas)
@@ -248,8 +272,8 @@ Switch, pero no iguales, a propósito ([por qué](#preguntas-frecuentes)).</sub>
 
 **Giroscopio**: en el juego, *Options > Controls > TILT TO STEER*. Con la consola derecha vas en línea
 recta; unos 30° de inclinación es el giro máximo. Todos los botones siguen funcionando.<br>
-**Menú de depuración**: mantén **ZL + ZR** y presiona **Menos**. Los cambios se guardan al momento en
-`settings.ini`.
+**Menú de depuración**: mantén **ZL + ZR** y presiona **Menos**; **L / R** cambian de página. Los cambios
+se guardan al momento en `settings.ini`.
 
 ## Estado
 
@@ -266,7 +290,8 @@ recta; unos 30° de inclinación es el giro máximo. Todos los botones siguen fu
 | 720p portátil / 1080p en el dock | ✅ Funciona |
 | Conectar o sacar del dock mientras juegas | 🧪 Nuevo en la 0.3.0: la resolución cambia al momento. Se agradecen comentarios |
 | FPS | ⚠️ Todavía en ajuste en consola real: el juego apunta a 30 FPS, y en carreras con mucha acción puede bajar de eso con los relojes de fábrica. El menú de depuración permite subir el reloj de la CPU. La 0.2.6 y la 0.2.7 quitan las causas principales de los tirones cortos encontradas hasta ahora. |
-| Cargas | ✅ Más rápidas desde la 0.2.7, sobre todo desde la segunda vez que lo abres (la caché JIT) |
+| Cargas | ✅ Más rápidas desde la 0.2.7, sobre todo desde la segunda vez que lo abres (la caché JIT). 🧪 La 0.3.1 agrega el impulso de CPU al cargar: aún sin medir en una consola |
+| Efectos de celulares, antialiasing, filtrado de texturas | 🧪 Nuevo en la 0.3.1: funciona en la versión de prueba para PC, aún sin probar en una consola |
 | Giroscopio, relojes personalizados | 🧪 Nuevo, aún sin confirmar en muchas consolas: se agradecen comentarios |
 | Funciones en línea (Autolog, clasificaciones, cuenta EA, tienda) | ❌ No disponibles: el port no usa internet a propósito |
 
@@ -285,6 +310,8 @@ consolas. Los reportes de más consolas son los que más ayudan, en español o e
 | Qué | Cómo ayudar |
 |---|---|
 | 🔌 **Poner y sacar del dock mientras juegas** (nuevo en la 0.3.0) | En una Switch o Switch OLED, pon la consola en el dock y sácala durante una carrera y en los menús. ¿La imagen se ve bien? |
+| ⏱️ **Tiempos de carga** (nuevo en la 0.3.1) | La CPU ahora funciona a 1785 MHz mientras el juego carga. `log.txt` tiene una línea `loading screen: ... s` por cada pantalla de carga: ¿cuánto duran las tuyas? |
+| ✨ **Antialiasing y efectos de celulares** (nuevo en la 0.3.1) | Activa el antialiasing (menú de depuración → GRAPHICS) y juega un poco, en portátil y en el dock si puedes: ¿los FPS se mantienen en 30? |
 | 🏎️ **FPS** | Activa el contador de FPS en el menú de depuración (ZL + ZR + Menos) y juega algunas carreras. Las líneas `perf:` de `log.txt` dicen qué limita los FPS. |
 | 🪟 **Reflejos** | Si las ventanas de los edificios se ven mal en tu consola, una foto ayuda. |
 | 🌍 **Idiomas** | Si un texto todavía dice MOGA, o el + y el − se ven mal en tu idioma, una captura ayuda. |
@@ -447,7 +474,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-El resultado es `build-switch/NFSMostWanted2012-0.3.0.nro`. Los detalles están en
+El resultado es `build-switch/NFSMostWanted2012-0.3.1.nro`. Los detalles están en
 [docs/BUILDING.md](docs/BUILDING.md) (en inglés).
 
 ## Créditos

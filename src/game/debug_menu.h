@@ -1,7 +1,10 @@
 // The port's debug menu: hold ZL + ZR and press Minus (in any order) to open
-// it. It changes the loader's performance settings (frame-rate limit, vsync,
-// 3D resolution, Switch clocks, the game's detail level) and the frame-rate
-// counter. Settings are saved to settings.ini right away.
+// it. Four pages, switched with L / R: PERFORMANCE (frame-rate limit, vsync,
+// Switch clocks, the CPU boost while loading, ...), GRAPHICS (detail level,
+// anti-aliasing, texture filtering, 3D resolution, frame-rate counter),
+// CONTROLS & SOUND (tilt steering, sound volume) and INFORMATION (live
+// figures: frame rate, clocks, temperatures, battery, threads, the last
+// loading times). Settings are saved to settings.ini right away.
 //
 // While it is open the game gets no input; opening it during a race first
 // pauses the race (the game's own pause, as with +).

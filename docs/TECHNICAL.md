@@ -82,6 +82,10 @@ Tested on the desktop build with the original 1.3.128 APK and OBB:
 | Random crash at start-up (a bug in the game's texture loading) | fixed in the loader (`src/game/fixes.cpp`) |
 | Rare crash loading into a race (a timing function reaching a missing object) | guarded in the loader (`src/game/fixes.cpp`) |
 | Rare crash loading into a race (the per-frame value store reaching a missing slot, 0.3.0) | guarded in the loader (`src/game/fixes.cpp`); the guard checked by calling the function with a slot taken away (`NFSMW_TEST_SLOT_NULL=1`) |
+| Threads released when they end (0.3.1) | working on desktop with the Switch's limit simulated (`NFSMW_THREAD_LIMIT`): the old behaviour left the garage on its spinner after a few cars, the new one loaded 40 cars in a row and a race with 10–11 threads running |
+| Phone effects, anti-aliasing, texture filtering (0.3.1) | working on desktop (flags read back, effects and cost measured in an automated race; the anti-aliased and filtered pictures checked); not yet tried on a console |
+| CPU boost while loading (0.3.1) | the detection of loads checked on desktop (which has no clocks to change); not yet tried on a console |
+| Debug menu pages, temperature and battery (0.3.1) | the pages checked on desktop; the temperatures and battery are read only on a console, not yet tried there |
 | 720p handheld / 1080p docked | working (1080p rendering checked on desktop) |
 | First-start setup from the APK or `.xapk`, fixing misplaced files | working on desktop; the Switch's setup screen and its restart are not yet confirmed on many consoles |
 | Same start-up on ARM64 with the Switch memory/JIT model (qemu) | working |
@@ -216,6 +220,40 @@ below 30 fps on a console, the debug menu can raise the CPU clock (1224 MHz is a
 Switch games use themselves). These numbers come from the desktop build; real hardware will
 tell how much headroom is left.
 
+### Loading (0.3.1)
+
+- **CPU boost while loading** (`loading_boost=on`, debug menu PERFORMANCE). A race's loading
+  thread on the console spends most of its time running game code (`log.txt`: `thread ...
+  finished after 38.6 s: CPU 32.8 s`), so the CPU clock sets its speed. While the game loads,
+  the port raises the CPU to 1785 MHz, as official Switch games do for their loading screens,
+  and puts the chosen clock back afterwards (`src/game/perf.cpp`). "Loading" is a loading screen
+  (the game logs `Lock: Is being locked. Lock count: 1` when one starts and `Lock count: 0` when
+  it ends) or a game thread started after the game began running that is working, not waiting
+  for work (the game starts one per car shown in the garage and per race; its first thread
+  waits in `pthread_cond_wait` for the whole session and does not count). The boost stays on
+  for 1.5 s after a load, so browsing cars does not switch the clock for each car, and never
+  lasts more than 120 s in one go. `log.txt` gets `loading screen: 24.1 s (CPU boost)` lines,
+  and the debug menu's INFORMATION page lists the latest loads.
+- **The JIT cache survives updates.** Up to 0.3.0 its lists were tied to the port version, so
+  the first session after every update translated everything again (the first race load took
+  several seconds longer). The lists only say where blocks of the game's own code start;
+  translating one of them ahead is correct whatever the port version, because it translates
+  the code as it is in memory. They are now tied to the game's code and a JIT generation number
+  (changed only when Dynarmic or its patch changes).
+- **The tiniest C library functions as guest code** (`src/hle/guest_fast.cpp`). Every C
+  library function the game calls is a host function: the translated code leaves the JIT, the
+  call is dispatched to C++, and the JIT is entered again. A race load calls `strcmp` about 3.5
+  million times and `__aeabi_memclr8` 2.7 million times, `tolower` 680,000 and `strlen` 510,000
+  times, each on a few bytes, so the round trip costs more than the work. These now run as small
+  ARM routines in guest memory, translated like the game's own code (`__aeabi_memclr4/8` hand
+  clears above 256 bytes to the host's `memset`). On the desktop build the race's loading thread
+  went from 2.9 to 2.5 s of CPU time (`NFSMW_NO_GUEST_FAST=1` turns them off for comparison); on
+  the console, where each host call costs more, the gain should be larger.
+- **Where a load's time goes, on the console.** Each game thread that loads times its host
+  calls, and its `thread ... finished after` line in `log.txt` ends with the total and the
+  slowest ones (`host calls 4.10 s: fread 1.92 s x31000, ...`). The desktop profile of a race
+  load is not the console's, and this shows what to work on next.
+
 ## Threads (0.3.1)
 
 Each game thread runs on a host thread of its own (`src/hle/libc_pthread.cpp`), and the game
@@ -341,6 +379,62 @@ call. The resize itself takes a few frames; `log.txt` logs it with its duration
 (`display: now 1920x1080 ...`). On the desktop test build, `NFSMW_TEST_DOCK` simulates the
 mode changes (for example `600:1920x1080,1800:1280x720`).
 
+### Phone effects (0.3.1)
+
+The game picks a detail level from the phone's speed (`getPerformanceScore()`; the port reports
+a score that gives the level chosen in the debug menu) and turns it into a word of feature flags,
+once: libapp.so's function at `0x3A4E5C` fills a static struct at `0xAD6518` (guarded by the byte
+at `0xAD6528`; `0x3A54E8` returns it), and code all over the game tests single bits of it. The
+words the game sets (read back on the desktop build, `log.txt`: `game features: ...`):
+
+| Detail level | Flags |
+|---|---|
+| Low | `0x50406820` |
+| Medium | `0x409070E0` |
+| High | `0x00BF57E2` |
+| Highest | `0x0EBFD7E2` |
+
+High sets nine flags Medium does not (1, 8, 9, 10, 16, 17, 18, 19, 21) and clears two that
+Medium sets (13 and 30). Named from the code that tests them: 8 turns on the environment's fog,
+18 the road's specular and wet-road effect (and car particle effects), 19 the engine's
+reverb/low-pass filter, 21 a part of the car shader's lighting, 10 the sky reflection textures.
+On the desktop build, in the same automated race (`NFSMW_FEATURES_ADD`, see BUILDING.md), each
+of the nine alone changed neither the game code's time per frame nor the GL calls measurably,
+and all nine together on Medium cost 12.1 ms per frame against 12.0 ms (2,670 GL calls against
+2,570), while High itself took 16.2 ms (3,150 calls), as did Medium with High's exact word. So
+what makes High slow is clearing 13 and 30: Medium's flags for drawing fewer objects.
+
+`phone_effects=high` (the default) adds High's nine flags to Medium's word before the game
+first reads it (on the first frame the port calls the game's own getter, then changes the
+word; `src/game/fixes.cpp`). `highest` also adds 15, 25 and 26, which only Highest sets
+(brake lights, a live hemisphere map for the car reflections): that cost 15.0 ms per frame, as
+much as High. The option acts at detail level Medium (`highest` also at High) and takes effect
+at the next start.
+
+### Texture filtering and anti-aliasing (0.3.1)
+
+Two graphics options the game itself does not have on Android, in the debug menu's GRAPHICS page
+and in `settings.ini`; both change while the game runs (`src/hle/gles.cpp`):
+
+- **Texture filtering** (`texture_filtering=off|2x|4x|8x|16x`, default 4x). The game never asks
+  for anisotropic filtering, so textures seen at a slant (the road ahead, building walls) blur.
+  Every texture the game gives a mipmap minification filter gets
+  `GL_TEXTURE_MAX_ANISOTROPY_EXT` at the chosen level (clamped to what the GPU allows; Maxwell
+  allows 16x); a change of the setting is applied to all of them at once. It costs the GPU a
+  little texture bandwidth and nothing on the CPU.
+- **Anti-aliasing** (`anti_aliasing=off|2x|4x`, default off). The game has multisampling code
+  (for its off-screen buffer, behind a feature flag only Highest sets and a GL extension check),
+  but the GL calls it would use are empty functions in the Android build, so no phone ever got
+  it. The port does it below the game: while it is on, the game's framebuffer 0 is a
+  multisampled framebuffer (RGBA8 + depth/stencil renderbuffers at the real screen size).
+  After the game's frame, before the port's own overlays, it is resolved into a single-sample
+  RGBA8 framebuffer and copied to the window (two blits, so the window may have any format).
+  Reads from framebuffer 0 (`glReadPixels`, `glCopyTexSubImage2D`) resolve first and read the
+  window; `glGetIntegerv(GL_FRAMEBUFFER_BINDING)` reports the game's own numbering. Docking or
+  undocking re-creates the buffers at the new size. At detail level Highest the game draws the
+  race scene into a texture of its own first, so the setting smooths only the menus there.
+  Its cost is GPU time and memory bandwidth, more at 1080p.
+
 ## The Switch's buttons in the game's texts (0.3.0)
 
 The game was made for touch screens and the MOGA gamepad, and the port hands it a MOGA Pro (see
@@ -465,29 +559,42 @@ The same combination, **B** or **+** closes it. Opening it during a race pauses 
 (with the game's own pause), and while it is open the game gets no input. ZL and ZR do nothing
 in this game, so the combination never triggers a game action.
 
-**Up/Down** picks a setting, **Left/Right** or **A** changes it. The touch screen works too:
-tap a row, tap the left or right half of a value to step it down or up, tap outside to close.
-Each setting shows a line of help, and a warning when the chosen value can make the game run
-worse. The bottom line shows the live frame rate, frame time and GL calls, so the effect of a
-change is visible right away. Changes are saved immediately to `settings.ini` in the port's folder.
+Since 0.3.1 it has four pages, switched with **L / R** or by tapping their tabs. **Up/Down**
+picks a setting, **Left/Right** or **A** changes it. The touch screen works too: tap a row, tap
+the left or right half of a value to step it down or up, tap outside to close. Each setting
+shows a line of help, and a warning when the chosen value can make the game run worse. The
+bottom line shows the live frame rate, frame time and GL calls, so the effect of a change is
+visible right away. Changes are saved immediately to `settings.ini` in the port's folder.
 
-| Setting | Choices | Recommended (default) | What it does |
-|---|---|---|---|
-| Frame rate limit | 30 / 60 / off | **30** | The game is made for 30 fps. 60 only helps if the game really reaches it. |
-| VSync | on / off | **on** | Off can tear. With 30 fps and VSync the display shows every second refresh (swap interval 2). |
-| 3D resolution | 100 % – 50 % | **100 %** | Draws the race scene at a lower resolution and stretches it back; menus and HUD stay sharp. Only acts at detail level Highest (see below). |
-| CPU clock | stock (1020) / 1224 / 1428 / 1581 / 1785 MHz | **stock** | The translated game code runs on the CPU. Raise it only if the counter stays below 30 fps. |
-| GPU clock | auto / stock / 307.2 – 768 MHz | **stock** | The game is light on the GPU. Auto = 460.8 MHz handheld (Nintendo's highest handheld clock), stock when docked. |
-| Memory clock | stock / 1331.2 / 1600 MHz | **stock** | 1600 MHz is the docked memory clock; Nintendo also uses it in handheld mode. |
-| Detail level | highest / high / medium / low | **medium** | The game's own detail tier. Applies the next time the game starts. |
-| GL on its own core | on / off | **on** | The GL thread described under [Performance](#performance). Applies at the next start. |
-| Direct memory access | on / off | **on** | Switch only: the JIT accesses guest memory directly. Turn it off if the game crashes. Next start. |
-| Sound volume | 100 % – 50 % | **70 %** | Volume of the game's mix before it is turned into 16-bit samples (see [Sound](#sound)). Above 70 % loud moments crackle. |
-| Frame-rate counter | off / FPS / full | off | Top-left corner. Full adds frame times, GL calls, clocks and resolution. |
+| Page | Setting | Choices | Recommended (default) | What it does |
+|---|---|---|---|---|
+| PERFORMANCE | Frame rate limit | 30 / 60 / off | **30** | The game is made for 30 fps. 60 only helps if the game really reaches it. |
+| PERFORMANCE | VSync | on / off | **on** | Off can tear. With 30 fps and VSync the display shows every second refresh (swap interval 2). |
+| PERFORMANCE | CPU clock | stock (1020) / 1224 / 1428 / 1581 / 1785 MHz | **stock** | The translated game code runs on the CPU. Raise it only if the counter stays below 30 fps. |
+| PERFORMANCE | GPU clock | auto / stock / 307.2 – 768 MHz | **stock** | The game is light on the GPU. Auto = 460.8 MHz handheld (Nintendo's highest handheld clock), stock when docked. |
+| PERFORMANCE | Memory clock | stock / 1331.2 / 1600 MHz | **stock** | 1600 MHz is the docked memory clock; Nintendo also uses it in handheld mode. |
+| PERFORMANCE | CPU boost while loading | on / off | **on** | 1785 MHz while the game loads, then the clock above (see [Loading](#loading-031)). |
+| PERFORMANCE | GL on its own core | on / off | **on** | The GL thread described under [Performance](#performance). Applies at the next start. |
+| PERFORMANCE | Direct memory access | on / off | **on** | Switch only: the JIT accesses guest memory directly. Turn it off if the game crashes. Next start. |
+| GRAPHICS | Detail level | highest / high / medium / low | **medium** | The game's own detail tier. Applies the next time the game starts. |
+| GRAPHICS | Phone effects | off / high-end phones / top phones | **high-end phones** | High's effects at Medium (see [Phone effects](#phone-effects-031)). Next start. |
+| GRAPHICS | Anti-aliasing | off / 2x / 4x | **off** | Multisampling of what the game draws to the screen. Costs GPU time. |
+| GRAPHICS | Texture filtering | standard / 2x – 16x | **4x** | Anisotropic filtering on every mipmapped texture. |
+| GRAPHICS | 3D resolution | 100 % – 50 % | **100 %** | Draws the race scene at a lower resolution and stretches it back; menus and HUD stay sharp. Only acts at detail level Highest (see below). |
+| GRAPHICS | Frame-rate counter | off / FPS / full | off | Top-left corner. Full adds frame times, GL calls, clocks and resolution. |
+| CONTROLS & SOUND | Tilt steering | off / on | off | The gyro steering under [Gyro steering](#gyro-steering) (also in the game's Options > Controls). |
+| CONTROLS & SOUND | Tilt for full lock | 15 – 60 degrees | **30** | Smaller = more sensitive. |
+| CONTROLS & SOUND | Invert tilt | off / on | off | For a car that steers the wrong way. |
+| CONTROLS & SOUND | Sound volume | 100 % – 50 % | **70 %** | Volume of the game's mix before it is turned into 16-bit samples (see [Sound](#sound)). Above 70 % loud moments crackle. |
 
-"Restore recommended settings" puts all of these back to the defaults above. Values that make
-the game slower are allowed on purpose (that is the point of a test menu); the help line says
-so when one is picked.
+INFORMATION shows live figures: the version and detail level, the screen and 3D resolution with
+the graphics options in use, frame rate and times, the clocks the hardware runs at (and whether
+the loading boost is on), the SoC and board temperatures (`ts`) and the battery (`psm`), the
+game's memory, the threads running, the latest loading times and the session's length.
+
+"Restore recommended settings" puts the PERFORMANCE and GRAPHICS settings and the sound volume
+back to the defaults above (tilt steering stays as it is). Values that make the game slower are
+allowed on purpose (that is the point of a test menu); the help line says so when one is picked.
 
 Notes:
 

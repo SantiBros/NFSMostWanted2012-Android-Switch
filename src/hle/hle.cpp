@@ -14,6 +14,7 @@ void register_all() {
     register_pthread();
     register_android();
     register_gles();
+    install_guest_fast();  // after the C library: replaces two of its functions
     jni::init();
 }
 

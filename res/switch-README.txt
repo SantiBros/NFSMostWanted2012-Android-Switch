@@ -35,8 +35,10 @@ FEATURES
   * The whole game is playable with the controller: driving, and every menu
     with a highlight you move with the D-pad. The touch screen still works.
   * Optional gyro steering: tilt the console or controller like a wheel.
-  * Debug menu (ZL + ZR + Minus) with performance settings, the sound volume
-    and an FPS counter.
+  * Debug menu (ZL + ZR + Minus), four pages: performance (clocks, CPU boost
+    while loading), graphics (detail level, anti-aliasing, texture
+    filtering), controls & sound (tilt steering, volume) and live
+    information (frame rate, temperatures, battery, loading times).
   * Online services are blocked: the game runs fully offline.
   * Your progress is kept in save/ and survives updates of the port.
 
@@ -148,8 +150,10 @@ Gyro steering: in the game, Options > Controls > TILT TO STEER (also in the
 pause menu under Controls). Hold the console level to drive straight; about
 30 degrees of tilt is full lock. The buttons work as above.
 
-Debug menu: hold ZL + ZR and press Minus. Up/Down picks a setting, Left/Right
-or A changes it, B closes it. Changes are saved at once in settings.ini.
+Debug menu: hold ZL + ZR and press Minus. L / R switch between its pages
+(PERFORMANCE, GRAPHICS, CONTROLS & SOUND, INFORMATION), Up/Down picks a
+setting, Left/Right or A changes it, B closes it. Changes are saved at once in
+settings.ini.
 
 
 UPDATING
@@ -242,7 +246,17 @@ WHAT'S NEW
     every loading screen, and the Switch allows a game 96 threads; the port
     did not give finished threads back. It now releases each one as soon as
     it ends.
-  * log.txt's "perf:" lines end with the number of threads running.
+  * Phone effects (on by default): the effects the game gives only fast
+    phones (haze in the distance, wet shiny roads, reflections on cars,
+    smoke, engine echo in tunnels) at detail level Medium, without the
+    extra objects that make detail level High slow.
+  * New graphics settings: anti-aliasing (smoother edges, off by default)
+    and texture filtering (sharper roads, 4x by default).
+  * Faster loading: the CPU runs at 1785 MHz while the game loads, then
+    goes back to normal. And from now on, updates keep the JIT cache.
+  * The debug menu has four pages (L / R): PERFORMANCE, GRAPHICS, CONTROLS
+    & SOUND (with the tilt steering settings) and INFORMATION (frame rate,
+    clocks, temperatures, battery, the latest loading times).
 
 0.3.0
   * Dock and undock while you play: the port switches to the new

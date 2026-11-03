@@ -20,6 +20,24 @@
 #include "hle/hle.h"
 #include "platform/platform.h"
 
+#ifndef GL_READ_FRAMEBUFFER
+#define GL_READ_FRAMEBUFFER 0x8CA8
+#define GL_DRAW_FRAMEBUFFER 0x8CA9
+#endif
+#ifndef GL_RGBA8
+#define GL_RGBA8 0x8058
+#endif
+#ifndef GL_DEPTH24_STENCIL8
+#define GL_DEPTH24_STENCIL8 0x88F0
+#endif
+#ifndef GL_MAX_SAMPLES
+#define GL_MAX_SAMPLES 0x8D57
+#endif
+#ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
+#define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
+#endif
+
 namespace hle {
 
 namespace {
@@ -521,19 +539,230 @@ void set_scale(float s) {
          scaled_h(), n);
 }
 
+void set_output(float o);
+}  // namespace scene
+namespace msaa {
+void on_resize();
+}
+namespace scene {
 void set_output(float o) {
     if (o <= 0.f || o == g_out) return;
     g_out = o;
+    msaa::on_resize();
     const int n = resize_targets();
     LOGI("output: the game's %dx%d screen is drawn at %dx%d (x%.3f), 3D scene %dx%d, %d render targets resized",
          g_screen_w, g_screen_h, scl(g_screen_w, o), scl(g_screen_h, o), o, scaled_w(), scaled_h(), n);
 }
 }  // namespace scene
 
+// ---- texture filtering (0.3.1) -------------------------------------------------
+// Anisotropic filtering keeps textures sharp when they are seen at a slant
+// (the road ahead, building walls). The game never asks for it, so the
+// loader adds it to every texture the game gives a mipmap minification filter
+// (only those can use it), and changes it on all of them when the setting
+// changes.
+namespace aniso {
+int g_level = 1;                     // 1 = off
+std::unordered_map<u32, bool> g_mip; // texture -> has a mipmap min filter (main thread)
+GLint g_max = 0;                     // what the driver allows (0: not asked yet)
+
+bool mip_filter(s32 v) { return v >= GL_NEAREST_MIPMAP_NEAREST && v <= GL_LINEAR_MIPMAP_LINEAR; }
+int driver_max() {
+    if (g_max == 0) {
+        static auto get = (void (*)(GLenum, GLint*))gl_proc("glGetIntegerv");
+        GLint m = 1;
+        glq::sync([&] { get(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &m); });
+        g_max = std::max(1, m);
+        LOGI("texture filtering: the GPU allows up to %dx anisotropic filtering", g_max);
+    }
+    return g_max;
+}
+int effective() { return g_level > 1 ? std::min(g_level, driver_max()) : 1; }
+void set_on_bound(u32 target, bool mip) {
+    static auto paramf = (void (*)(GLenum, GLenum, GLfloat))gl_proc("glTexParameterf");
+    if (mip && g_level > 1) glq::call(paramf, target, (GLenum)GL_TEXTURE_MAX_ANISOTROPY_EXT, (GLfloat)effective());
+}
+// The game set a minification filter on the texture bound to `target`.
+void min_filter(u32 target, u32 tex, s32 v) {
+    if (!tex) return;
+    const bool mip = mip_filter(v);
+    g_mip[tex] = mip;
+    set_on_bound(target, mip);
+}
+void set_level(int level, u32 bound_2d) {
+    level = std::clamp(level, 1, 16);
+    if (level == g_level) return;
+    const int old = effective();
+    g_level = level;
+    const int now = effective();
+    if (now == old) return;
+    static auto bind = (void (*)(GLenum, GLuint))gl_proc("glBindTexture");
+    static auto paramf = (void (*)(GLenum, GLenum, GLfloat))gl_proc("glTexParameterf");
+    int n = 0;
+    for (auto& [tex, mip] : g_mip) {
+        if (!mip) continue;
+        glq::call(bind, GL_TEXTURE_2D, tex);
+        glq::call(paramf, GL_TEXTURE_2D, (GLenum)GL_TEXTURE_MAX_ANISOTROPY_EXT, (GLfloat)now);
+        n++;
+    }
+    glq::call(bind, GL_TEXTURE_2D, bound_2d);
+    LOGI("texture filtering: %s on %d textures", now > 1 ? (std::to_string(now) + "x anisotropic").c_str() : "off", n);
+}
+}  // namespace aniso
+
+// ---- anti-aliasing (0.3.1) -----------------------------------------------------
+// Multisample anti-aliasing for what the game draws to the screen. The game
+// never gets it on Android (its multisample code is there, but EA left the GL
+// calls it needs empty in this build), so the loader does it itself: while it
+// is on, the game's framebuffer 0 is a multisampled framebuffer of the
+// loader's, the size of the real screen, and after each game frame it is
+// resolved into the screen (through a plain RGBA8 framebuffer, so the screen
+// may have any format). The game is not told: it binds and reads framebuffer
+// 0 as before. At detail level Highest the game draws the race scene into a
+// texture of its own first, which this does not smooth.
+namespace msaa {
+int g_want = 0;     // samples asked for (0 = off)
+int g_samples = 0;  // samples in use
+GLuint g_fbo = 0, g_color = 0, g_depth = 0;  // multisampled
+GLuint g_rfbo = 0, g_rcolor = 0;             // single-sample resolve target
+int g_w = 0, g_h = 0;
+int g_max = -1;     // GL_MAX_SAMPLES (-1: not asked yet; 0: no multisampling)
+
+#define MS_FN(ret, name, args) static auto name = (ret(*) args)gl_proc("gl" #name)
+GLuint host_fbo(u32 game_fb) { return game_fb == 0 && g_samples > 0 ? g_fbo : game_fb; }
+
+// GL thread
+void destroy_gl() {
+    MS_FN(void, DeleteFramebuffers, (GLsizei, const GLuint*));
+    MS_FN(void, DeleteRenderbuffers, (GLsizei, const GLuint*));
+    if (g_fbo) DeleteFramebuffers(1, &g_fbo);
+    if (g_rfbo) DeleteFramebuffers(1, &g_rfbo);
+    GLuint rbs[3] = {g_color, g_depth, g_rcolor};
+    for (GLuint rb : rbs)
+        if (rb) DeleteRenderbuffers(1, &rb);
+    g_fbo = g_rfbo = g_color = g_depth = g_rcolor = 0;
+}
+bool create_gl(int samples, int w, int h) {
+    MS_FN(void, GenFramebuffers, (GLsizei, GLuint*));
+    MS_FN(void, GenRenderbuffers, (GLsizei, GLuint*));
+    MS_FN(void, BindFramebuffer, (GLenum, GLuint));
+    MS_FN(void, BindRenderbuffer, (GLenum, GLuint));
+    MS_FN(void, RenderbufferStorage, (GLenum, GLenum, GLsizei, GLsizei));
+    MS_FN(void, RenderbufferStorageMultisample, (GLenum, GLsizei, GLenum, GLsizei, GLsizei));
+    MS_FN(void, FramebufferRenderbuffer, (GLenum, GLenum, GLenum, GLuint));
+    MS_FN(GLenum, CheckFramebufferStatus, (GLenum));
+    MS_FN(GLenum, GetError, ());
+    if (!RenderbufferStorageMultisample) return false;
+    while (GetError() != GL_NO_ERROR) {
+    }
+    GenRenderbuffers(1, &g_color);
+    BindRenderbuffer(GL_RENDERBUFFER, g_color);
+    RenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, w, h);
+    GenRenderbuffers(1, &g_depth);
+    BindRenderbuffer(GL_RENDERBUFFER, g_depth);
+    RenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, w, h);
+    GenFramebuffers(1, &g_fbo);
+    BindFramebuffer(GL_FRAMEBUFFER, g_fbo);
+    FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, g_color);
+    FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, g_depth);
+    FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, g_depth);
+    bool ok = CheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    GenRenderbuffers(1, &g_rcolor);
+    BindRenderbuffer(GL_RENDERBUFFER, g_rcolor);
+    RenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, w, h);
+    GenFramebuffers(1, &g_rfbo);
+    BindFramebuffer(GL_FRAMEBUFFER, g_rfbo);
+    FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, g_rcolor);
+    ok = ok && CheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE && GetError() == GL_NO_ERROR;
+    BindRenderbuffer(GL_RENDERBUFFER, scene::g_bound_rb);
+    if (!ok) destroy_gl();
+    return ok;
+}
+// Copy the multisampled picture to the screen (framebuffer 0), resolving it.
+void resolve_gl(int w, int h) {
+    MS_FN(void, BindFramebuffer, (GLenum, GLuint));
+    MS_FN(void, BlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum));
+    MS_FN(GLboolean, IsEnabled, (GLenum));
+    MS_FN(void, Disable, (GLenum));
+    MS_FN(void, Enable, (GLenum));
+    MS_FN(void, GetBooleanv, (GLenum, GLboolean*));
+    MS_FN(void, ColorMask, (GLboolean, GLboolean, GLboolean, GLboolean));
+    if (!g_fbo) return;
+    const GLboolean scissor = IsEnabled(GL_SCISSOR_TEST);
+    GLboolean mask[4];
+    GetBooleanv(GL_COLOR_WRITEMASK, mask);
+    if (scissor) Disable(GL_SCISSOR_TEST);
+    ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    BindFramebuffer(GL_READ_FRAMEBUFFER, g_fbo);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, g_rfbo);
+    BlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    BindFramebuffer(GL_READ_FRAMEBUFFER, g_rfbo);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    BlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    if (scissor) Enable(GL_SCISSOR_TEST);
+    ColorMask(mask[0], mask[1], mask[2], mask[3]);
+}
+void rebind(GLuint fb) {
+    MS_FN(void, BindFramebuffer, (GLenum, GLuint));
+    BindFramebuffer(GL_FRAMEBUFFER, fb);
+}
+void resolve_and_rebind(int w, int h, GLuint fb) {
+    resolve_gl(w, h);
+    rebind(fb);
+}
+// For reads from the game's framebuffer 0: resolve, and read from the screen.
+void resolve_for_read(int w, int h) {
+    MS_FN(void, BindFramebuffer, (GLenum, GLuint));
+    resolve_gl(w, h);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, g_fbo);
+    BindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+}
+#undef MS_FN
+
+int max_samples();
+void rebuild();
+void on_resize() {
+    if (g_want > 1) rebuild();
+}
+int max_samples() {
+    if (g_max < 0) {
+        static auto get = (void (*)(GLenum, GLint*))gl_proc("glGetIntegerv");
+        static auto blit = gl_proc("glBlitFramebuffer");
+        static auto ms = gl_proc("glRenderbufferStorageMultisample");
+        GLint m = 0;
+        if (blit && ms) glq::sync([&] { get(GL_MAX_SAMPLES, &m); });
+        g_max = std::max(0, m);
+        LOGI("anti-aliasing: the GPU allows up to %dx multisampling", g_max);
+    }
+    return g_max;
+}
+// (Re)create the buffers for the wanted sample count and the real screen size.
+void rebuild() {
+    const int want = g_want > 1 ? std::min(g_want, max_samples()) : 0;
+    const int w = std::max(1, scene::scl(scene::g_screen_w, scene::g_out));
+    const int h = std::max(1, scene::scl(scene::g_screen_h, scene::g_out));
+    if (want == g_samples && (want == 0 || (w == g_w && h == g_h))) return;
+    bool ok = true;
+    glq::sync([&] {
+        destroy_gl();
+        if (want > 1) ok = create_gl(want, w, h);
+    });
+    g_samples = want > 1 && ok ? want : 0;
+    g_w = w;
+    g_h = h;
+    static auto bind = (void (*)(GLenum, GLuint))gl_proc("glBindFramebuffer");
+    glq::call(bind, (GLenum)GL_FRAMEBUFFER, host_fbo(scene::g_bound_fbo));
+    if (want > 1 && !ok) LOGW("anti-aliasing: %dx multisampling at %dx%d is not available; off", want, w, h);
+    else LOGI("anti-aliasing: %s", g_samples ? (std::to_string(g_samples) + "x MSAA at " + std::to_string(w) + "x" +
+                                                std::to_string(h)).c_str()
+                                             : "off");
+}
+}  // namespace msaa
+
 void m_glBindFramebuffer(u32 target, u32 fb) {
     LOAD(glBindFramebuffer);
     GL_TRACE("glBindFramebuffer");
-    glq::call(p, target, fb);
+    glq::call(p, target, msaa::host_fbo(fb));
     scene::g_bound_fbo = fb;
     scene::update_bound();
     if (scene::g_trace.load(std::memory_order_relaxed) > 0) {
@@ -581,6 +810,7 @@ void m_glDeleteTextures(s32 n, u32 ids) {
     for (s32 i = 0; i < n; i++) {
         u32 id = mem::r32(ids + i * 4);
         scene::g_tex.erase(id);
+        aniso::g_mip.erase(id);
         game::controller_art::forget_texture(id);
         for (u32& b : scene::g_bound_tex)
             if (b == id) b = 0;
@@ -675,6 +905,11 @@ void m_glTexImage2D(u32 target, s32 level, s32 ifmt, s32 w, s32 h, s32 border, u
 void m_glTexParameteri(u32 target, u32 pname, s32 v) {
     LOAD(glTexParameteri);
     GL_TRACE("glTexParameteri");
+    if (pname == GL_TEXTURE_MIN_FILTER && target == GL_TEXTURE_2D) {
+        glq::call(p, target, pname, v);
+        aniso::min_filter(target, scene::g_bound_tex[scene::g_unit], v);
+        return;
+    }
     if (target == GL_TEXTURE_2D && pname == GL_TEXTURE_MAG_FILTER) {
         auto it = scene::g_tex.find(scene::g_bound_tex[scene::g_unit]);
         if (it != scene::g_tex.end() && it->second.target) {
@@ -683,6 +918,13 @@ void m_glTexParameteri(u32 target, u32 pname, s32 v) {
         }
     }
     glq::call(p, target, pname, v);
+}
+void m_glTexParameterf(u32 target, u32 pname, float v) {
+    LOAD(glTexParameterf);
+    GL_TRACE("glTexParameterf");
+    glq::call(p, target, pname, v);
+    if (pname == GL_TEXTURE_MIN_FILTER && target == GL_TEXTURE_2D)
+        aniso::min_filter(target, scene::g_bound_tex[scene::g_unit], (s32)v);
 }
 void m_glBindRenderbuffer(u32 target, u32 rb) {
     LOAD(glBindRenderbuffer);
@@ -797,6 +1039,12 @@ void m_glCopyTexSubImage2D(u32 target, s32 level, s32 xo, s32 yo, s32 x, s32 y, 
                      scene::g_rect_f, dst);
         }
     }
+    if (scene::g_bound_fbo == 0 && msaa::g_samples > 0) {
+        glq::call(&msaa::resolve_for_read, msaa::g_w, msaa::g_h);
+        glq::call(p, target, level, xo, yo, x, y, w, h);
+        glq::call(&msaa::rebind, msaa::g_fbo);
+        return;
+    }
     glq::call(p, target, level, xo, yo, x, y, w, h);
 }
 void m_glReadPixels(s32 x, s32 y, s32 w, s32 h, u32 fmt, u32 type, u32 px) {
@@ -806,6 +1054,12 @@ void m_glReadPixels(s32 x, s32 y, s32 w, s32 h, u32 fmt, u32 type, u32 px) {
     if (scene::g_rect_f != 1.f) {
         static std::atomic<bool> once{false};
         if (!once.exchange(true)) LOGW("glReadPixels from a framebuffer drawn x%.3f: read unscaled", scene::g_rect_f);
+    }
+    if (scene::g_bound_fbo == 0 && msaa::g_samples > 0) {
+        glq::call(&msaa::resolve_for_read, msaa::g_w, msaa::g_h);
+        glq::call_sync_void(p, x, y, w, h, fmt, type, mem::ptr<void>(px));
+        glq::call(&msaa::rebind, msaa::g_fbo);
+        return;
     }
     glq::call_sync_void(p, x, y, w, h, fmt, type, mem::ptr<void>(px));
 }
@@ -819,6 +1073,10 @@ void m_glGetIntegerv(u32 pname, u32 out) {
     }
     if (pname == GL_SCISSOR_BOX && scene::g_have_sc) {
         for (int i = 0; i < 4; i++) mem::w32(out + i * 4, (u32)scene::g_sc[i]);
+        return;
+    }
+    if (pname == GL_FRAMEBUFFER_BINDING) {  // the game's own numbering (anti-aliasing replaces 0)
+        mem::w32(out, scene::g_bound_fbo);
         return;
     }
     glq::call_sync_void(p, pname, mem::ptr<GLint>(out));
@@ -1072,6 +1330,17 @@ void gl_set_output_size(int w, int h) {
     if (scene::g_screen_w > 0) scene::set_output((float)w / (float)scene::g_screen_w);
 }
 float gl_output_scale() { return scene::g_out; }
+void gl_set_anisotropy(int level) { aniso::set_level(level, scene::g_bound_tex[scene::g_unit]); }
+int gl_anisotropy() { return aniso::effective(); }
+void gl_set_msaa(int samples) {
+    msaa::g_want = samples > 1 ? samples : 0;
+    msaa::rebuild();
+}
+int gl_msaa_samples() { return msaa::g_samples; }
+void gl_end_game_frame() {
+    if (msaa::g_samples > 0)
+        glq::call(&msaa::resolve_and_rebind, msaa::g_w, msaa::g_h, msaa::host_fbo(scene::g_bound_fbo));
+}
 void gl_update_texture(u32 texture, int x, int y, int w, int h, const u8* rgba) {
     static auto bind = (void (*)(GLenum, GLuint))gl_proc("glBindTexture");
     static auto sub = (void (*)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*))gl_proc(
@@ -1102,6 +1371,7 @@ void register_gles() {
     REG("glTexImage2D", m_glTexImage2D);
     REG("glCompressedTexImage2D", f_glCompressedTexImage2D);
     REG("glTexParameteri", m_glTexParameteri);
+    REG("glTexParameterf", m_glTexParameterf);
     REG("glBindRenderbuffer", m_glBindRenderbuffer);
     REG("glDeleteRenderbuffers", m_glDeleteRenderbuffers);
     REG("glRenderbufferStorage", m_glRenderbufferStorage);

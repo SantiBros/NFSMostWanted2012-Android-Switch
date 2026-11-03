@@ -1,10 +1,12 @@
 #include "game/perf.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -14,6 +16,7 @@
 #include "hle/file_cache.h"
 #include "hle/gl_queue.h"
 #include "hle/hle.h"
+#include "core/cpu.h"
 #include "core/jit_cache.h"
 #include "dynarmic/interface/compile_stats.h"
 #include "platform/thread.h"
@@ -43,6 +46,32 @@ double g_win_tick = 0, g_win_gl = 0, g_win_calls = 0, g_win_worst = 0;
 
 platform::Clocks g_clocks_now;
 bool g_have_clocks = false;
+std::atomic<long> g_frames{0};
+
+// Loading: the game's loading-screen lock and its loading threads (set from
+// any thread), and the boost the main thread puts into effect.
+std::atomic<int> g_lock_count{0};
+std::atomic<bool> g_game_running{false};
+std::mutex g_load_mutex;
+struct LoadThread {
+    u32 id;
+    Clock::time_point since;
+};
+std::vector<LoadThread> g_load_threads;     // game threads running now (g_load_mutex)
+constexpr double kMaxLoadThreadSecs = 180;  // a thread running longer is not a load (a service thread)
+std::vector<Load> g_loads;                  // newest first
+Clock::time_point g_screen_since, g_thread_since;
+bool g_boosting = false;                    // main thread
+bool g_boost_capped = false;                // boosted too long: wait for the loads to end
+Clock::time_point g_boost_since;
+Clock::time_point g_last_loading;
+constexpr double kMaxBoostSecs = 120;       // safety net: never boost longer than this in one go
+
+void add_load(bool screen, double secs) {
+    std::lock_guard lk(g_load_mutex);
+    g_loads.insert(g_loads.begin(), Load{screen, secs, g_boosting});
+    if (g_loads.size() > 6) g_loads.resize(6);
+}
 
 // Summary for the log every 10 seconds (log.txt in the port's folder), so a
 // console's numbers come back with the log file.
@@ -121,10 +150,10 @@ void apply_pacing() {
     g_have_next = false;
 }
 
-void apply_clocks() {
+void apply_clocks(bool quiet = false) {
     platform::Clocks c;
     wanted_clocks(c.cpu, c.gpu, c.mem);
-    platform::set_clocks(c);
+    platform::set_clocks(c, quiet);
 }
 
 std::string mhz(u32 hz) {
@@ -172,6 +201,7 @@ const char* tier_name(int tier) {
 void wanted_clocks(u32& cpu, u32& gpu, u32& mem) {
     const auto& p = prefs::get();
     cpu = p.cpu_khz > 0 ? (u32)p.cpu_khz * 1000u : 0;
+    if (g_boosting) cpu = std::max(cpu, 1785000000u);
     if (p.gpu_khz == prefs::kClockAuto) gpu = g_docked ? 0 : 460800000u;  // handheld: Nintendo's top handheld clock
     else gpu = p.gpu_khz > 0 ? (u32)p.gpu_khz * 1000u : 0;
     mem = p.mem_khz > 0 ? (u32)p.mem_khz * 1000u : 0;
@@ -199,14 +229,108 @@ void apply() {
     apply_pacing();
     apply_clocks();
     hle::gl_set_scene_scale(prefs::get().scene_scale / 100.f);
+    hle::gl_set_anisotropy(prefs::get().anisotropy);
+    hle::gl_set_msaa(prefs::get().msaa);
+}
+
+void loading_screen(int lock_count) {
+    const int before = g_lock_count.exchange(lock_count);
+    if (before == 0 && lock_count > 0) {
+        std::lock_guard lk(g_load_mutex);
+        g_screen_since = Clock::now();
+    } else if (before > 0 && lock_count == 0) {
+        Clock::time_point t0;
+        {
+            std::lock_guard lk(g_load_mutex);
+            t0 = g_screen_since;
+        }
+        const double secs = std::chrono::duration<double>(Clock::now() - t0).count();
+        LOGI("loading screen: %.1f s%s", secs, g_boosting ? " (CPU boost)" : "");
+        add_load(true, secs);
+    }
+}
+
+void game_ticked() { g_game_running.store(true, std::memory_order_relaxed); }
+bool game_running() { return g_game_running.load(std::memory_order_relaxed); }
+
+void loading_thread(u32 id, bool started) {
+    const auto now = Clock::now();
+    double secs = -1;
+    {
+        std::lock_guard lk(g_load_mutex);
+        if (started) {
+            if (g_load_threads.empty()) g_thread_since = now;
+            g_load_threads.push_back({id, now});
+        } else {
+            for (size_t i = 0; i < g_load_threads.size(); i++)
+                if (g_load_threads[i].id == id) {
+                    g_load_threads.erase(g_load_threads.begin() + (long)i);
+                    break;
+                }
+            if (g_load_threads.empty() && g_lock_count.load() == 0)
+                secs = std::chrono::duration<double>(now - g_thread_since).count();
+        }
+    }
+    if (secs >= 0) add_load(false, secs);
+}
+
+bool loading_now() {
+    if (g_lock_count.load() > 0) return true;
+    const auto now = Clock::now();
+    std::lock_guard lk(g_load_mutex);
+    // A load thread is working (not a service thread waiting for work, as the
+    // game's first one does for the whole session).
+    for (const LoadThread& t : g_load_threads)
+        if (std::chrono::duration<double>(now - t.since).count() < kMaxLoadThreadSecs && !cpu::thread_waiting(t.id))
+            return true;
+    return false;
+}
+bool boosting_now() { return g_boosting; }
+
+std::vector<Load> recent_loads() {
+    std::lock_guard lk(g_load_mutex);
+    return g_loads;
+}
+
+long frames_shown() { return g_frames.load(); }
+bool clocks_now(u32& cpu, u32& gpu, u32& mem) {
+    cpu = g_clocks_now.cpu, gpu = g_clocks_now.gpu, mem = g_clocks_now.mem;
+    return g_have_clocks;
 }
 
 void frame_begin() {
     bool d = platform::is_docked();  // cached by the system library: cheap
+    bool reapply = false;
     if (d != g_docked) {
         g_docked = d;
-        apply_clocks();  // the "auto" GPU clock depends on the mode
+        reapply = true;  // the "auto" GPU clock depends on the mode
     }
+    // CPU boost while the game loads (only when it raises the clock). It stays
+    // on for a moment after a load, so that browsing cars in the garage (a load
+    // each) does not switch the clock for every car.
+    const bool loading_raw = loading_now();
+    if (loading_raw) g_last_loading = Clock::now();
+    const bool loading =
+        loading_raw || (g_boosting && std::chrono::duration<double>(Clock::now() - g_last_loading).count() < 1.5);
+    if (!loading) g_boost_capped = false;
+    const bool useful = prefs::get().loading_boost && prefs::get().cpu_khz < 1785000;
+    bool want = useful && loading && !g_boost_capped;
+    if (want && g_boosting &&
+        std::chrono::duration<double>(Clock::now() - g_boost_since).count() > kMaxBoostSecs) {
+        LOGW("loading boost: still loading after %.0f s; back to the normal clock until it ends", kMaxBoostSecs);
+        g_boost_capped = true;
+        want = false;
+    }
+    bool boost_changed = false;
+    if (want != g_boosting) {
+        g_boosting = want;
+        if (want) g_boost_since = Clock::now();
+        else
+            LOGI("loading boost: CPU 1785 MHz for %.1f s while the game loaded",
+                 std::chrono::duration<double>(Clock::now() - g_boost_since).count());
+        boost_changed = true;
+    }
+    if (reapply || boost_changed) apply_clocks(/*quiet=*/!reapply);
     platform::tick();
 }
 
@@ -249,6 +373,7 @@ void frame_end() {
     g_last_end = now;
     g_have_last = true;
     g_win_frames++;
+    g_frames.fetch_add(1, std::memory_order_relaxed);
     double win_ms = std::chrono::duration<double, std::milli>(now - g_win_start).count();
     if (win_ms >= 500 && g_win_frames > 0) {
         g_stats.fps = (float)(g_win_frames * 1000.0 / win_ms);

@@ -2,6 +2,8 @@
 // statistics for the debug menu and the frame-rate counter.
 #pragma once
 
+#include <vector>
+
 #include "core/common.h"
 
 namespace game::perf {
@@ -45,6 +47,29 @@ float performance_score(int screen_w, int screen_h);
 // Clocks in Hz the settings ask for right now (0 = stock), after resolving
 // "auto" for the current handheld/docked mode.
 void wanted_clocks(u32& cpu, u32& gpu, u32& mem);
+
+// Loading (0.3.1). The game shows a loading screen between "Lock: Is being
+// locked" and "Unlock: ... Lock count: 0" in its log, and starts a thread for
+// every load (a car in the garage, a race). While either is going on the CPU
+// runs at 1785 MHz when prefs loading_boost is on (official Switch games do the
+// same), and each load's time is kept for the debug menu.
+void loading_screen(int lock_count);       // any thread
+void loading_thread(u32 id, bool started); // a game thread started once the game runs / ended (any thread)
+void game_ticked();                        // main thread, each game frame (load threads count from then on)
+bool game_running();
+bool loading_now();
+bool boosting_now();
+struct Load {
+    bool screen;  // a loading screen (else a background load, e.g. a car in the garage)
+    double secs;
+    bool boosted;
+};
+// The latest loads, newest first (at most 6).
+std::vector<Load> recent_loads();
+// Frames shown so far.
+long frames_shown();
+// The clocks the hardware ran at in the last half second (false: not known).
+bool clocks_now(u32& cpu, u32& gpu, u32& mem);
 
 // Frame-rate counter over the finished frame (when switched on).
 void draw_counter(int screen_w, int screen_h);

@@ -269,6 +269,20 @@ int main(int argc, char** argv) {
     // GL thread: surface callbacks
     if (!platform::gl_init(S.width, S.height)) fatal("could not create an OpenGL ES 2 context");
     game::perf::init(S.width, S.height);  // vsync / frame limit, clocks, 3D resolution
+    {
+        // Phone effects (0.3.1): the game's effect flags of detail level High
+        // (fog, wet roads, car reflections, particles, engine echo...) added to
+        // Medium, which keeps its fewer objects; "highest" adds those of Highest.
+        constexpr u32 kHighEffects = 0x002F0702u;     // flags 1, 8-10, 16-19, 21
+        constexpr u32 kHighestEffects = 0x06008000u;  // flags 15, 25, 26
+        const int tier = game::perf::startup_tier(), fx = game::prefs::at_startup().effects;
+        u32 add = 0;
+        if (fx != game::prefs::kEffectsGame && tier == game::prefs::kQualityMedium) add |= kHighEffects;
+        if (fx == game::prefs::kEffectsHighest &&
+            (tier == game::prefs::kQualityMedium || tier == game::prefs::kQualityHigh))
+            add |= kHighestEffects;
+        game::fixes::set_feature_overrides(add, 0);
+    }
     // Threaded GL: the game's GL calls run on their own thread (Switch: core 2).
     if (game::prefs::at_startup().gl_thread && !std::getenv("NFSMW_NO_GL_THREAD")) {
         if (!hle::glq::start(2)) platform::reserve_core_for_gl(-1);
@@ -331,6 +345,7 @@ int main(int argc, char** argv) {
             static auto glClear = (void (*)(unsigned))platform::gl_get_proc("glClear");
             hle::glq::call(glClearColor, 1.f, 1.f, 1.f, 1.f);
             hle::glq::call(glClear, 0x4100u);
+            hle::gl_end_game_frame();  // with anti-aliasing the clear went to its framebuffer
             if (frame >= 3 && native(kGA, "nativeRestoreContext", "()Z", {}, jni::activity()).i()) {
                 native(kGA, "nativeOnStart", "()V", {}, jni::activity());
                 native(kGA, "nativeOnResume", "()V", {}, jni::activity());
@@ -354,10 +369,12 @@ int main(int argc, char** argv) {
 #endif
             auto tk0 = std::chrono::steady_clock::now();
             game::ui::frame_begin();
+            game::perf::game_ticked();
             platform::sample_gate(true, &cpu::current().in_thunk);
             jni::call_native("com/ea/ironmonkey/RunLoop", "nativeOnRunLoopTick", "()V", jni::run_loop(), {});
             platform::sample_gate(false, nullptr);
             hle::gl_flush_state();  // vertex arrays the state filter held back, before the overlay
+            hle::gl_end_game_frame();  // anti-aliasing: the game's picture to the screen
             double tick_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tk0).count();
             double gl_ms = (hle::gl_time_ns() - gl0) / 1e6;
             u64 calls = hle::gl_call_count() - calls0;
@@ -409,6 +426,13 @@ int main(int argc, char** argv) {
             if (dc == "fbtrace") hle::gl_fbtrace(2);
             if (dc == "profile") prof_frames = 200;
             if (dc == "sample") platform::sample_start();
+            // Graphics options for comparisons: "cmd af<N>" (texture filtering), "cmd aa<N>" (anti-aliasing).
+            if (dc.size() > 2 && (dc.rfind("af", 0) == 0 || dc.rfind("aa", 0) == 0)) {
+                const int n = std::atoi(dc.c_str() + 2);
+                if (dc[1] == 'f') game::prefs::get().anisotropy = std::max(1, n);
+                else game::prefs::get().msaa = n > 1 ? n : 0;
+                game::perf::apply();
+            }
         }
         if (hle::gl_fbtrace_left() > 0) { LOGI("fb: ---- swap ----"); hle::gl_fbtrace(hle::gl_fbtrace_left() - 1); }
         // Screenshots (desktop): of the finished frame, before the swap.

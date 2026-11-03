@@ -8,6 +8,8 @@
 #include <mutex>
 #include <initializer_list>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "core/common.h"
 
@@ -43,6 +45,9 @@ struct GuestThread {
     u64 guest_insns = 0;  // with NFSMW_COUNT_INSNS=1
     u64 slow_reads = 0;   // memory reads through the callbacks (exclusive loads, page-table misses)
     u64 excl_writes = 0;  // exclusive stores (STREX) that reached memory
+    // Loading threads (0.3.1): time in each host function, for the summary
+    // the thread logs when it ends (host_calls_summary). Empty when off.
+    std::vector<std::pair<u64, u32>> host_time;  // per SVC number: ns, calls
     std::unique_ptr<Dynarmic::A32::Jit> jit;
     std::unique_ptr<Callbacks> callbacks;
     bool is_main = false;
@@ -92,6 +97,13 @@ void trace_calls_end(const char* label);
 void note_call(GuestThread& t, const char* name);
 void trace_all(bool on);
 // Time spent in each host function on the main thread (debugging).
+// Loading threads: time host calls on the current thread from now on, and
+// the summary at its end ("host calls 1.2 s: fread 0.6 s x12000, ...").
+void host_calls_timing_begin();
+std::string host_calls_summary(int top = 6);
+// The guest thread with this id is blocked in a waiting host call (condition
+// variable, sleep, join, ...) or not running at all.
+bool thread_waiting(u32 id);
 void profile_begin();
 void profile_end(int frames, double tick_ms_total);  // histogram of host calls by thread (excluding the main thread)
 

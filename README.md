@@ -31,14 +31,19 @@ folder, and race through Fairhaven, handheld or docked.
 > Wii U or iOS versions of Most Wanted (2012) don't work.
 
 > [!TIP]
-> **New in 0.3.0**
-> - **Dock and undock while you play**: the resolution follows at once (720p handheld, 1080p docked).
-> - **The Switch's buttons in the game**: the controls pages and tutorials say +, −, A, B, X, Y
->   instead of the MOGA gamepad's buttons, in all 11 languages, with new pictures of the controls:
->   a handheld console in handheld mode and a controller when docked ([see them](#controls)).
-> - **A rare crash while loading a race is fixed.**
+> **New in 0.3.1**
+> - **Effects of high-end phones**: haze in the distance, wet and shiny roads, reflections on the cars,
+>   smoke, the engine's echo in tunnels, now at the recommended detail level too, at almost no cost
+>   ([see it](#screenshots)).
+> - **Anti-aliasing** (smoother edges, optional) and **texture filtering** (the road ahead stays sharp).
+> - **Faster loading**: the CPU runs at 1785 MHz while the game loads, as official Switch games do;
+>   the game's most frequent small calls got faster; and updates now keep the JIT cache.
+> - **A bigger debug menu** (ZL + ZR + Minus) in four pages: performance, graphics, controls & sound,
+>   and live information (temperatures, battery, loading times).
+> - **Fixed: after a long session, cars stopped appearing in the garage and the next race stayed black.**
 >
-> All the details are in the [changelog](CHANGELOG.md).
+> 0.3.0 brought docking and undocking while you play and the Switch's buttons in the game. All the
+> details are in the [changelog](CHANGELOG.md).
 
 ## Screenshots
 
@@ -75,11 +80,19 @@ Switch's handheld resolution. It shows how the game looks, not the console's fra
   </tr>
   <tr>
     <td><img src="docs/images/screenshots/pause-menu.jpg" alt="The pause menu during a race"></td>
-    <td><img src="docs/images/screenshots/debug-menu.jpg" alt="The port's debug menu over the map"></td>
+    <td><img src="docs/images/screenshots/phone-effects.jpg" alt="A race at detail level Medium with the phone effects: haze over the city, a wet, shiny road"></td>
   </tr>
   <tr>
     <td align="center"><sub>The pause menu, mid-race</sub></td>
-    <td align="center"><sub>The port's debug menu (ZL + ZR + Minus): frame rate, VSync, 3D resolution, clocks, sound</sub></td>
+    <td align="center"><sub>New in 0.3.1: the effects of high-end phones (haze, wet road) at the recommended detail level</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshots/debug-menu.jpg" alt="The port's debug menu, GRAPHICS page"></td>
+    <td><img src="docs/images/screenshots/debug-menu-info.jpg" alt="The port's debug menu, INFORMATION page"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>The debug menu (ZL + ZR + Minus), GRAPHICS page: phone effects, anti-aliasing, texture filtering</sub></td>
+    <td align="center"><sub>Its INFORMATION page: frame rate, clocks, temperatures, battery, loading times (some only on the console)</sub></td>
   </tr>
 </table>
 
@@ -95,6 +108,11 @@ tutorial for controller steering. More pictures: the [controls pages](#controls)
   ARM code goes through a CPU recompiler ([Dynarmic](https://github.com/azahar-emu/dynarmic)), because
   Switch homebrew can only run 64-bit code ([why](#faq)).
 - **720p in handheld mode, 1080p docked, and you can dock or undock while you play.**
+- **The effects of high-end phones, at the cost of a mid-range one.** The game gives fast phones
+  haze in the distance, wet and shiny roads, reflections on the cars, smoke and the engine's echo in
+  tunnels; the port turns them on at its recommended detail level, without the extra objects that
+  make the game's High level slow. Plus optional **anti-aliasing** and **texture filtering**, which no
+  phone had in this game.
 - **Switch buttons in the game.** The controls pages and tutorials name the Switch's buttons instead
   of the MOGA gamepad the game was made for, in all 11 languages. The controls pages show the
   port's own drawings with the Switch's button layout: a handheld console in handheld mode, a
@@ -107,12 +125,15 @@ tutorial for controller steering. More pictures: the [controls pages](#controls)
 - **Forgiving.** Libraries left in `lib/armeabi-v7a/`, an assets folder in the wrong place or a
   renamed OBB are moved where they belong automatically.
 - **Faster with every start.** The port remembers which parts of the game's code it has translated
-  (the JIT cache) and translates them ahead of time from then on: shorter loading screens and
-  fewer stutters.
+  (the JIT cache, kept across updates) and translates them ahead of time from then on: shorter
+  loading screens and fewer stutters. While the game loads, the CPU runs at 1785 MHz, as official
+  Switch games do.
 - **Fully offline.** Every online service is blocked; career, races, cars and saves work offline.
 - **Your career in one file** (`save/progress/nfstr_save.sb`): easy to back up, kept across updates.
-- **Debug menu** (ZL + ZR + Minus): frame-rate limit, VSync, 3D resolution, detail level, CPU / GPU /
-  memory clocks, sound volume and a frame-rate counter.
+- **Debug menu** (ZL + ZR + Minus), four pages switched with L / R: performance (frame-rate limit,
+  VSync, CPU / GPU / memory clocks, the loading boost), graphics (detail level, phone effects,
+  anti-aliasing, texture filtering, 3D resolution, a frame-rate counter), controls & sound (tilt
+  steering, volume) and live information (clocks, temperatures, battery, loading times).
 - **Three crashes of the original game fixed** in the loader.
 
 ## What you need
@@ -134,7 +155,7 @@ tutorial for controller steering. More pictures: the [controls pages](#controls)
 <img src="docs/images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
 
 1. **Download.** On the [Releases](../../releases) page, under **Assets**, download
-   `NFSMostWanted2012-0.3.0.zip` (not "Source code", which is only for developers) and unzip it on
+   `NFSMostWanted2012-0.3.1.zip` (not "Source code", which is only for developers) and unzip it on
    your computer.
 2. **Copy to the SD card.** Copy the `switch` folder from the zip to the root of your SD card.
 3. **Add your game.** Copy your APK and your OBB into `switch/NFSMostWanted2012/game/`. Don't unzip or
@@ -153,7 +174,7 @@ tutorial for controller steering. More pictures: the [controls pages](#controls)
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.3.0.nro   the port
+├── NFSMostWanted2012-0.3.1.nro   the port
 ├── README.txt                    the player's guide
 ├── LICENSES.txt                  open-source components and their licenses
 ├── game/                         YOUR game files (never share them)
@@ -234,7 +255,8 @@ but not the same, on purpose ([why](#faq)).</sub>
 
 **Gyro steering**: in the game, *Options > Controls > TILT TO STEER*. Hold the console level to drive
 straight; about 30° of tilt is full lock. All buttons keep working.<br>
-**Debug menu**: hold **ZL + ZR** and press **Minus**. Changes are saved at once in `settings.ini`.
+**Debug menu**: hold **ZL + ZR** and press **Minus**; **L / R** switch its pages. Changes are saved at once
+in `settings.ini`.
 
 ## Status
 
@@ -251,7 +273,8 @@ straight; about 30° of tilt is full lock. All buttons keep working.<br>
 | 720p handheld / 1080p docked | ✅ Works |
 | Docking and undocking while you play | 🧪 New in 0.3.0: the resolution follows at once. Feedback welcome |
 | Frame rate | ⚠️ Still being tuned on real hardware: the game targets 30 fps, and busy races can drop below that at stock clocks. The debug menu can raise the CPU clock. 0.2.6 and 0.2.7 remove the main causes of short stutters found so far. |
-| Loading | ✅ Faster since 0.2.7, most of all from the second start on (the JIT cache) |
+| Loading | ✅ Faster since 0.2.7, most of all from the second start on (the JIT cache). 🧪 0.3.1 adds the CPU boost while loading: not yet measured on a console |
+| Phone effects, anti-aliasing, texture filtering | 🧪 New in 0.3.1: working on the PC test build, not yet tried on a console |
 | Gyro steering, custom clocks | 🧪 New, not yet confirmed on many consoles: feedback welcome |
 | Online features (Autolog, leaderboards, EA account, store) | ❌ Not available: the port is offline by design |
 
@@ -269,6 +292,8 @@ more consoles help the most, in English or Spanish, with `log.txt` from the port
 | What | How to help |
 |---|---|
 | 🔌 **Docking while playing** (new in 0.3.0) | On a Switch or Switch OLED, put the console in the dock and take it out during a race and in the menus. Does the picture stay right? |
+| ⏱️ **Loading times** (new in 0.3.1) | The CPU now runs at 1785 MHz while the game loads. `log.txt` has a `loading screen: ... s` line for each loading screen: how long are yours? |
+| ✨ **Anti-aliasing and phone effects** (new in 0.3.1) | Turn on anti-aliasing (debug menu → GRAPHICS) and race a little, handheld and docked if you can: does the frame rate stay at 30? |
 | 🏎️ **Frame rate** | Turn on the frame-rate counter in the debug menu (ZL + ZR + Minus) and play a few races. The `perf:` lines in `log.txt` say what holds the frame rate back. |
 | 🪟 **Reflections** | If the building windows look wrong on your console, a photo helps. |
 | 🌍 **Languages** | If a text still says MOGA, or + / − look wrong in your language, a screenshot helps. |
@@ -430,7 +455,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-The result is `build-switch/NFSMostWanted2012-0.3.0.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
+The result is `build-switch/NFSMostWanted2012-0.3.1.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
 the details, the Linux test build used for development, and how a release is made.
 
 ## Credits

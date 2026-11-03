@@ -53,6 +53,7 @@ set(CORE_SOURCES
   src/core/hook.cpp
   src/hle/hle.cpp
   src/hle/libc_string.cpp
+  src/hle/guest_fast.cpp
   src/hle/libc_stdio.cpp
   src/hle/libc_io.cpp
   src/hle/file_cache.cpp

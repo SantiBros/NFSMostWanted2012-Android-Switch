@@ -562,7 +562,7 @@ bool clocks_supported() {
     return clk_init();
 }
 
-void set_clocks(const Clocks& c) {
+void set_clocks(const Clocks& c, bool quiet) {
     static bool hooked = false;
     if (!hooked) {
         hooked = true;
@@ -576,6 +576,7 @@ void set_clocks(const Clocks& c) {
         g_target[kMem] = c.mem;
     }
     apply_clocks();
+    if (quiet) return;
     auto mhz = [](u32 hz) {
         char b[24];
         if (!hz) return std::string("stock");
@@ -621,6 +622,42 @@ std::string system_info() {
                   how, loader.empty() ? "" : " by ", loader.c_str(), (unsigned long long)((total - used) >> 20),
                   (unsigned long long)(total >> 20));
     return buf;
+}
+
+bool system_status(SystemStatus& o) {
+    static bool tried = false, psm_ok = false, ts_ok = false, ts_session = false;
+    static TsSession soc, pcb;
+    if (!tried) {
+        tried = true;
+        psm_ok = R_SUCCEEDED(psmInitialize());
+        ts_ok = R_SUCCEEDED(tsInitialize());
+        if (ts_ok && hosversionAtLeast(10, 0, 0))
+            ts_session = R_SUCCEEDED(tsOpenSession(&soc, TsDeviceCode_LocationExternal)) &&
+                         R_SUCCEEDED(tsOpenSession(&pcb, TsDeviceCode_LocationInternal));
+    }
+    o = SystemStatus{};
+    if (psm_ok) {
+        u32 pct = 0;
+        PsmChargerType ct = PsmChargerType_Unconnected;
+        if (R_SUCCEEDED(psmGetBatteryChargePercentage(&pct))) {
+            o.battery = true;
+            o.battery_pct = (int)pct;
+            if (R_SUCCEEDED(psmGetChargerType(&ct))) o.charging = ct != PsmChargerType_Unconnected;
+        }
+    }
+    if (ts_ok) {
+        if (ts_session) {
+            float a = 0, b = 0;
+            o.temps = R_SUCCEEDED(tsSessionGetTemperature(&soc, &a)) && R_SUCCEEDED(tsSessionGetTemperature(&pcb, &b));
+            o.soc_c = a, o.pcb_c = b;
+        } else {
+            s32 a = 0, b = 0;
+            o.temps = R_SUCCEEDED(tsGetTemperature(TsLocation_External, &a)) &&
+                      R_SUCCEEDED(tsGetTemperature(TsLocation_Internal, &b));
+            o.soc_c = (float)a, o.pcb_c = (float)b;
+        }
+    }
+    return o.battery || o.temps;
 }
 
 bool memory_usage(u64& used, u64& total) {

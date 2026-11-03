@@ -15,6 +15,7 @@ namespace game::prefs {
 // desktop build), and the CPU is what limits this port.
 enum Quality : int { kQualityHighest = 0, kQualityHigh, kQualityMedium, kQualityLow };
 enum Overlay : int { kOverlayOff = 0, kOverlayFps, kOverlayFull };
+enum Effects : int { kEffectsGame = 0, kEffectsHigh, kEffectsHighest };
 // Clock settings, in kHz. Special values:
 constexpr int kClockStock = 0;  // whatever the console's own profile uses
 constexpr int kClockAuto = -1;  // GPU only: 460.8 MHz handheld, stock docked
@@ -36,6 +37,17 @@ struct Values {
     int cpu_khz = kClockStock;
     int gpu_khz = kClockStock;
     int mem_khz = kClockStock;
+    // While the game loads (loading screens, a car in the garage), the CPU runs
+    // at 1785 MHz, as official Switch games do, and goes back to cpu_khz after.
+    bool loading_boost = true;
+    // Graphics (0.3.1): anisotropic texture filtering (1 = off, 2-16) and
+    // anti-aliasing of the picture (0 = off, 2 or 4 samples). Both change live.
+    int anisotropy = 4;
+    int msaa = 0;
+    // The effects the game gives fast phones (its feature flags of detail
+    // level High, or Highest), added to detail level Medium without High's
+    // extra objects: kEffectsGame = as the detail level has them.
+    int effects = kEffectsHigh;
     int overlay = kOverlayOff;
     // FMOD master volume in percent (50-100). At 100 the game's mix goes past
     // the 16-bit limit at loud moments (up to 1.8x full scale in a race) and is

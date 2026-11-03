@@ -6,8 +6,10 @@
 #include <atomic>
 #include <chrono>
 #include <vector>
+#include <cstdio>
 #include <cstdlib>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 
 #include "core/cpu.h"
@@ -323,7 +325,58 @@ void test_slot_null() {
     }
 }
 
+// ---- the game's feature flags (0.3.1) -----------------------------------------
+// The game turns its detail level (Low/Medium/High/Highest, from the phone's
+// speed) into a word of feature flags, once (libapp.so: the function at
+// 0x3A4E5C fills a static struct at 0xAD6518, guarded by the byte at
+// 0xAD6528; 0x3A54E8 returns it). Medium sets 0x409070E0, High 0x00AF57C2,
+// Highest 0x0EBFD7E2 (plus bits every level gets). The loader can add and
+// remove flags before the game reads them (see features()).
+namespace features {
+constexpr u32 kStruct = 0xAD6518, kGuard = 0xAD6528, kGetter = 0x3A54E8;
+u32 g_add = 0, g_remove = 0;
+bool g_done = false;
+
+u32 parse_mask(const char* v) { return (u32)std::strtoul(v, nullptr, 0); }
+
+void apply() {
+    if (g_done) return;
+    g_done = true;
+    elf::Module* m = elf::find("libapp.so");
+    if (!m) return;
+    // Its code must be the build the addresses are for (the getter starts
+    // with push {r11, lr}).
+    if (mem::r32(m->base + kGetter) != 0xE92D4800u) {
+        LOGW("features: different game build; flags left as they are");
+        return;
+    }
+    // Debugging: NFSMW_FEATURES_ADD / NFSMW_FEATURES_REMOVE (masks).
+    if (const char* e = std::getenv("NFSMW_FEATURES_ADD")) g_add |= parse_mask(e);
+    if (const char* e = std::getenv("NFSMW_FEATURES_REMOVE")) g_remove |= parse_mask(e);
+    const bool was_set = mem::r8(m->base + kGuard) != 0;
+    if (!was_set) cpu::current().call(m->base + kGetter, {});  // the game's own first call
+    const u32 st = m->base + kStruct;
+    const u32 before = mem::r32(st);
+    const u32 after = (before | g_add) & ~g_remove;
+    mem::w32(st, after);
+    LOGI("game features: 0x%08X%s%s", before,
+         after != before ? (" -> 0x" + [&] {
+             char b[16];
+             std::snprintf(b, sizeof b, "%08X", after);
+             return std::string(b);
+         }() + " (port options)").c_str()
+                         : "",
+         was_set ? " (already read by the game)" : "");
+}
+}  // namespace features
+
+void set_feature_overrides(u32 add, u32 remove) {
+    features::g_add = add;
+    features::g_remove = remove;
+}
+
 void frame() {
+    features::apply();
     upload::service();
     test_slot_null();
 }

@@ -39,6 +39,8 @@ void add_thread_dtor(u32 fn, u32 obj);
 s32 futex_op(u32 uaddr, int op, u32 val, u32 timeout);
 bool opensl_available();
 
+// strcmp and __aeabi_memclr4/8 as guest ARM code instead of host calls (guest_fast.cpp).
+void install_guest_fast();
 // Number of network calls the game attempted (all refused; net_block.cpp).
 u32 blocked_network_attempts();
 
@@ -66,6 +68,17 @@ float gl_output_scale();  // real screen / game screen (1 = the size the game st
 // them); the texture bound before stays bound. Copies the pixels; call from
 // the thread that issues the game's GL calls.
 void gl_update_texture(u32 texture, int x, int y, int w, int h, const u8* rgba);
+// Graphics options (0.3.1): anisotropic filtering (1 = off, up to 16; on
+// every mipmapped texture, changed live) and anti-aliasing of what the game
+// draws to the screen (0 = off, 2 or 4 samples). The numbers in use are
+// clamped to what the GPU allows.
+void gl_set_anisotropy(int level);
+int gl_anisotropy();
+void gl_set_msaa(int samples);
+int gl_msaa_samples();
+// After the game's frame, before the loader's overlays: the anti-aliased
+// picture to the screen.
+void gl_end_game_frame();
 float gl_scene_scale();
 bool gl_scene_scaled_targets();  // the game has drawn into a scaled target
 

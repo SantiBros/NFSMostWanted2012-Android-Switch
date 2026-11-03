@@ -71,7 +71,7 @@ struct Clocks {
     u32 cpu = 0, gpu = 0, mem = 0;
 };
 bool clocks_supported();
-void set_clocks(const Clocks& target);
+void set_clocks(const Clocks& target, bool quiet = false);  // quiet: no log line
 bool get_clocks(Clocks& current);  // what the hardware runs at now
 bool is_docked();
 // Once per frame on the main thread (re-applies clocks when needed).
@@ -131,6 +131,17 @@ AudioStats audio_stats();
 // Memory the process uses, and (Switch) how much it may use, in bytes. False
 // when not known.
 bool memory_usage(u64& used, u64& total);
+// Battery and temperatures for the debug menu's information page (Switch;
+// false elsewhere or when the system services are not available). Each call
+// asks the system: call it at most a few times per second.
+struct SystemStatus {
+    bool battery = false;   // battery_pct / charging valid
+    int battery_pct = 0;
+    bool charging = false;
+    bool temps = false;     // soc_c / pcb_c valid
+    float soc_c = 0, pcb_c = 0;
+};
+bool system_status(SystemStatus& out);
 // One line for log.txt about the system the port runs on: firmware, how it
 // was started, the memory it may use ("" if nothing to say).
 std::string system_info();

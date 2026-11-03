@@ -67,6 +67,13 @@ to those frames (the race clip in the README: `--screenshot-every 1`). The contr
 writes `src/game/controller_art_images.inc`; `--preview DIR` also saves them as PNG files. `NFSMW_TEST_SLOT_NULL=1` checks the 0.3.0 game fix for
 the per-frame value store: about 900 frames in, it calls that function with a slot taken away
 (with `NFSMW_NO_SLOT_FIX=1` as well, the game crashes there, as it did before the fix).
+`NFSMW_FEATURES_ADD=<mask>` and `NFSMW_FEATURES_REMOVE=<mask>` add and take away the game's own
+feature flags of its detail levels before it reads them (see [TECHNICAL.md](TECHNICAL.md); the log
+line `game features: 0x...` shows them), and the control commands `cmd af<N>` / `cmd aa<N>` change
+texture filtering and anti-aliasing mid-run, for comparisons of the same frame.
+`NFSMW_NO_GUEST_FAST=1` leaves `strcmp`, `strlen`, `tolower`, `toupper` and `__aeabi_memclr4/8` as
+host calls (see TECHNICAL.md, Loading 0.3.1), and `NFSMW_HOST_CALLS_TOP=<n>` lists that many host
+functions in the `host calls` part of a loading thread's log line.
 `NFSMW_THREAD_LIMIT=96` refuses new threads past that number, as the Switch does, and
 `NFSMW_NO_THREAD_REAP=1` never releases detached threads, as up to 0.3.0 on the Switch: together
 they reproduce the 0.3.0 garage bug on the desktop (a car that never loads after enough loads).

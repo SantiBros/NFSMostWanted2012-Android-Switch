@@ -65,6 +65,21 @@ int snap(int khz, std::initializer_list<int> allowed) {
     return best;
 }
 
+// "off" / "4x"
+std::string times_text(int n) { return n > 1 ? std::to_string(n) + "x" : "off"; }
+int parse_times(const char* v, std::initializer_list<int> allowed) {
+    const int n = std::atoi(v);  // "4x" -> 4, "off" -> 0
+    int best = 0;
+    for (int a : allowed)
+        if (a <= n) best = a;
+    return best > 1 ? best : (allowed.size() && *allowed.begin() == 1 ? 1 : 0);
+}
+const char* effects_text(int e) { return e == kEffectsHigh ? "high" : e == kEffectsHighest ? "highest" : "off"; }
+int parse_effects(const char* v) {
+    if (!std::strcmp(v, "high")) return kEffectsHigh;
+    if (!std::strcmp(v, "highest")) return kEffectsHighest;
+    return kEffectsGame;
+}
 const char* overlay_text(int o) { return o == kOverlayFps ? "fps" : o == kOverlayFull ? "full" : "off"; }
 int parse_overlay(const char* v) {
     if (!std::strcmp(v, "fps")) return kOverlayFps;
@@ -114,6 +129,16 @@ void save() {
                  "cpu_clock=%s\n"
                  "gpu_clock=%s\n"
                  "mem_clock=%s\n"
+                 "# Faster loading: the CPU runs at 1785 MHz while the game loads (loading screens,\n"
+                 "# a car in the garage), as official Switch games do, then goes back to cpu_clock.\n"
+                 "loading_boost=%s\n"
+                 "# Sharper textures seen at a slant (roads, walls): off, 2x, 4x, 8x or 16x.\n"
+                 "texture_filtering=%s\n"
+                 "# Smoother edges (multisample anti-aliasing): off, 2x or 4x. Costs GPU time.\n"
+                 "anti_aliasing=%s\n"
+                 "# Effects the game gives only fast phones (fog, wet roads, car reflections,\n"
+                 "# particles...), added to detail level Medium: off, high or highest (next start).\n"
+                 "phone_effects=%s\n"
                  "# Frame rate counter: off, fps or full.\n"
                  "overlay=%s\n"
                  "\n"
@@ -134,7 +159,8 @@ void save() {
                  v.gyro_steering ? "on" : "off", v.gyro_max_angle, v.gyro_invert ? "on" : "off",
                  v.fps_limit ? std::to_string(v.fps_limit).c_str() : "off", v.vsync ? "on" : "off", v.scene_scale,
                  quality_text(v.quality), clock_text(v.cpu_khz).c_str(), clock_text(v.gpu_khz).c_str(),
-                 clock_text(v.mem_khz).c_str(), overlay_text(v.overlay), v.sound_volume, v.gl_thread ? "on" : "off", v.jit_cache ? "on" : "off",
+                 clock_text(v.mem_khz).c_str(), v.loading_boost ? "on" : "off", times_text(v.anisotropy).c_str(),
+                 times_text(v.msaa).c_str(), effects_text(v.effects), overlay_text(v.overlay), v.sound_volume, v.gl_thread ? "on" : "off", v.jit_cache ? "on" : "off",
                  v.direct_memory ? "on" : "off");
     std::fclose(f);
 }
@@ -148,7 +174,7 @@ void load() {
         g_startup = v;
         return;
     }
-    bool has_perf = false, has_sound = false, has_jit = false;
+    bool has_perf = false, has_sound = false, has_jit = false, has_boost = false, has_gfx = false;
     char line[256];
     while (std::fgets(line, sizeof line, f)) {
         char key[64] = {}, val[64] = {};
@@ -166,6 +192,16 @@ void load() {
         else if (!std::strcmp(key, "cpu_clock")) v.cpu_khz = parse_clock(val, false);
         else if (!std::strcmp(key, "gpu_clock")) v.gpu_khz = parse_clock(val, true);
         else if (!std::strcmp(key, "mem_clock")) v.mem_khz = parse_clock(val, false);
+        else if (!std::strcmp(key, "loading_boost")) {
+            v.loading_boost = parse_bool(val);
+            has_boost = true;
+        }
+        else if (!std::strcmp(key, "texture_filtering")) {
+            v.anisotropy = parse_times(val, {1, 2, 4, 8, 16});
+            has_gfx = true;
+        }
+        else if (!std::strcmp(key, "anti_aliasing")) v.msaa = parse_times(val, {0, 2, 4});
+        else if (!std::strcmp(key, "phone_effects")) v.effects = parse_effects(val);
         else if (!std::strcmp(key, "overlay")) v.overlay = parse_overlay(val);
         else if (!std::strcmp(key, "sound_volume")) {
             v.sound_volume = std::clamp(std::atoi(val), 50, 100);
@@ -182,12 +218,14 @@ void load() {
     v.cpu_khz = snap(v.cpu_khz, {1020000, 1224000, 1428000, 1581000, 1785000});
     v.gpu_khz = snap(v.gpu_khz, {307200, 384000, 460800, 614400, 768000});
     v.mem_khz = snap(v.mem_khz, {1331200, 1600000});
-    if (!has_perf || !has_sound || !has_jit) save();  // older file: add the settings it does not have yet
+    if (!has_perf || !has_sound || !has_jit || !has_boost || !has_gfx) save();  // older file: add the settings it does not have yet
     g_startup = v;
-    LOGI("settings: fps limit %s, vsync %s, 3D resolution %d%%, quality %s, clocks cpu %s gpu %s mem %s",
+    LOGI("settings: fps limit %s, vsync %s, 3D resolution %d%%, quality %s, clocks cpu %s gpu %s mem %s, loading boost "
+         "%s, texture filtering %s, anti-aliasing %s, phone effects %s",
          v.fps_limit ? std::to_string(v.fps_limit).c_str() : "off", v.vsync ? "on" : "off", v.scene_scale,
          quality_text(v.quality), clock_text(v.cpu_khz).c_str(), clock_text(v.gpu_khz).c_str(),
-         clock_text(v.mem_khz).c_str());
+         clock_text(v.mem_khz).c_str(), v.loading_boost ? "on" : "off", times_text(v.anisotropy).c_str(),
+         times_text(v.msaa).c_str(), effects_text(v.effects));
 }
 
 }  // namespace game::prefs

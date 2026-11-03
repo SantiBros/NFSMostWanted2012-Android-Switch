@@ -77,14 +77,22 @@ void on_compile(u64 descriptor) {
     if (l.known.insert(descriptor).second) l.order.push_back(descriptor);
 }
 
-// FNV-1a over the port version and the game libraries' code: lists from a
-// different game build or port version are not used.
+// FNV-1a over the JIT's generation and the game libraries' own code: lists
+// from a different game build are not used. Up to 0.3.0 the port version was
+// part of it, so every update threw the lists away and the first session
+// after it translated everything again. A list only holds where blocks of the
+// game's code start, and translating one of them ahead is right whatever the
+// port version (it translates the code as it is in memory now, hooks
+// included); at worst a block is translated that is never run. So from 0.3.1
+// the lists survive updates. kGeneration changes only when the JIT itself
+// (Dynarmic or its patch) changes how it names blocks.
+constexpr const char* kGeneration = "jit-cache-generation-1";
 u64 compute_identity() {
     u64 h = 0xCBF29CE484222325ull;
     auto add = [&h](const u8* p, size_t n) {
         for (size_t i = 0; i < n; i++) h = (h ^ p[i]) * 0x100000001B3ull;
     };
-    const std::string v = NFSMW_VERSION;
+    const std::string v = kGeneration;
     add(reinterpret_cast<const u8*>(v.data()), v.size());
     for (const elf::Module* m : elf::all()) {
         add(reinterpret_cast<const u8*>(m->name.data()), m->name.size());
@@ -111,7 +119,7 @@ void load(List& l, std::vector<u64>& warm) {
     }
     std::fclose(f);
     if (!ok) {
-        LOGI("JIT cache: %s is from another game build or port version; starting a new one", l.file);
+        LOGI("JIT cache: %s is from another game build or an older port version; starting a new one", l.file);
         return;
     }
     std::lock_guard lk(l.mutex);

@@ -4,6 +4,39 @@ All notable changes to the port. The release zip's `README.txt` carries the same
 
 ## [0.3.1]
 
+### Added
+- **Phone effects** (debug menu GRAPHICS, `phone_effects=high`, on by default). The game picks
+  a detail level from the phone's speed, and the fast phones' levels turn on effects that the
+  port's recommended level, Medium, leaves out: haze in the distance, wet, shiny roads, sky
+  reflections on the cars, smoke, the engine's echo in tunnels. They come from a word of
+  feature flags the game fills once from its detail level; the port now adds High's effect
+  flags to Medium before the game reads them. What makes High slow is something else: High
+  also leaves out two of Medium's "fewer objects" flags. On the PC test build, in the same
+  automated race, Medium with the effects took 12.1 ms of game code per frame (Medium alone
+  12.0 ms, High 16.2 ms). "Top phones" also adds Highest's live car reflections and brake
+  lights, but costs about as much as High. Takes effect at the next start.
+- **Anti-aliasing** (debug menu GRAPHICS, `anti_aliasing=off|2x|4x`, off by default): smoother
+  edges. The game has multisampling code, but EA left the GL calls it needs empty in the
+  Android version, so no phone ever had it; the port does it below the game. It costs GPU
+  time (more when docked), so it is off unless you turn it on. It does nothing at detail level
+  Highest, which draws the race into a texture of its own first.
+- **Texture filtering** (debug menu GRAPHICS, `texture_filtering`, 4x by default): the road
+  ahead and building walls stay sharp instead of blurring with distance (anisotropic filtering,
+  which the game never asks for). Cheap for the GPU; off, 2x, 4x, 8x or 16x.
+- **CPU boost while loading** (debug menu PERFORMANCE, `loading_boost=on`). While the game
+  loads (a loading screen, a car in the garage) the CPU runs at 1785 MHz, as official Switch
+  games do, then goes back to the normal clock. Loading on the console is almost all CPU work
+  (in the report's log, a race: 33 s of CPU time in 39 s), so loading screens should get up to
+  about a third shorter (1785 instead of 1020 MHz); not yet measured on a console. Loading
+  also needs less CPU time: the C library functions the game calls millions of times per load
+  on a few bytes each (`strcmp`, `strlen`, `tolower`, `toupper`, clearing small blocks) now run
+  as guest code instead of a trip out of the JIT for each call: on the PC test build, a race's
+  loading thread went from 2.9 to 2.5 s of CPU time.
+- **A bigger debug menu**, in four pages switched with L / R: PERFORMANCE, GRAPHICS, CONTROLS &
+  SOUND (tilt steering on/off, how far to tilt for full lock, invert; until now only in
+  `settings.ini` and the game's options) and INFORMATION (live: frame rate, clocks, SoC and
+  board temperature, battery, memory, threads, the latest loading times, session time).
+
 ### Fixed
 - **After a long session, cars stopped appearing in the garage, and then the next race stayed on
   a black screen.** Reported with a `log.txt` from about an hour of play. The game starts a new
@@ -17,9 +50,14 @@ All notable changes to the port. The release zip's `README.txt` carries the same
   play. Every version up to 0.3.0 had this; browsing many cars in the garage brought it on sooner.
 
 ### Changed
-- The `perf:` lines in `log.txt` end with the number of threads the port has running
-  (`threads 10`), so a report shows at once if threads ever pile up again.
-- As after every update, the first start rebuilds the JIT cache.
+- **Updates no longer throw away the JIT cache.** Up to 0.3.0 the cache was tied to the port's
+  version, so the first session after each update was slower (the code was translated again).
+  From 0.3.1 on it is kept across updates (it only lists where the game's own code starts, which
+  an update doesn't change). Updating to 0.3.1 itself still starts a new one, once.
+- `log.txt`: the `perf:` lines end with the number of threads running (`threads 10`); each
+  loading screen gets a line with its length (`loading screen: 24.1 s (CPU boost)`); and each
+  long load says where its time went outside the game's own code (`host calls 4.10 s: fread
+  1.92 s ...`), to show what to speed up next.
 
 ## [0.3.0]
 

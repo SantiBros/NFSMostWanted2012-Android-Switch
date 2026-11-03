@@ -1,7 +1,11 @@
 #include "core/cpu.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
+#if defined(__SWITCH__)
+#include <switch.h>
+#endif
 #include <atomic>
 #include <map>
 #include <string>
@@ -49,6 +53,22 @@ inline u64 prof_now() {
     return (u64)std::chrono::duration_cast<std::chrono::nanoseconds>(
                std::chrono::steady_clock::now().time_since_epoch())
         .count();
+}
+// Loading threads time every host call: on the Switch with the system
+// counter (a register read, 19.2 MHz), elsewhere with the steady clock.
+inline u64 host_ticks() {
+#if defined(__SWITCH__)
+    return armGetSystemTick();
+#else
+    return prof_now();
+#endif
+}
+inline double host_ticks_s(u64 t) {
+#if defined(__SWITCH__)
+    return armTicksToNs(t) / 1e9;
+#else
+    return t / 1e9;
+#endif
 }
 
 size_t alloc_processor_id() {
@@ -263,6 +283,11 @@ struct Callbacks final : public A32::UserCallbacks {
             e->fn(*t);
             g_prof_ns[swi] += prof_now() - t0;
             g_prof_n[swi]++;
+        } else if (!t->host_time.empty() && swi < t->host_time.size()) {
+            u64 t0 = host_ticks();
+            e->fn(*t);
+            t->host_time[swi].first += host_ticks() - t0;
+            t->host_time[swi].second++;
         } else {
             e->fn(*t);
         }
@@ -615,6 +640,36 @@ void trace_all(bool on) {
     for (auto& [n, k] : v) line += k + " x" + std::to_string(n) + ", ";
     LOGI("other threads: %s", line.c_str());
 }
+void host_calls_timing_begin() {
+    if (t_current) t_current->host_time.assign(kProfSlots, {0, 0});
+}
+std::string host_calls_summary(int top) {
+    static const int env_top = std::getenv("NFSMW_HOST_CALLS_TOP") ? std::atoi(std::getenv("NFSMW_HOST_CALLS_TOP")) : 0;
+    if (env_top > 0) top = env_top;
+    GuestThread* t = t_current;
+    if (!t || t->host_time.empty()) return "";
+    std::vector<std::pair<u64, u32>> v;
+    u64 total = 0;
+    for (u32 i = 0; i < t->host_time.size(); i++)
+        if (t->host_time[i].second) {
+            v.emplace_back(t->host_time[i].first, i);
+            total += t->host_time[i].first;
+        }
+    std::sort(v.rbegin(), v.rend());
+    char b[160];
+    std::snprintf(b, sizeof b, "host calls %.2f s", host_ticks_s(total));
+    std::string out = b;
+    for (int k = 0; k < (int)v.size() && k < top; k++) {
+        const thunks::Entry* e = thunks::entry(v[k].second);
+        std::snprintf(b, sizeof b, "%s %s %.2f s x%u", k ? "," : ":", e ? e->name.c_str() : "?",
+                      host_ticks_s(v[k].first), t->host_time[v[k].second].second);
+        out += b;
+    }
+    t->host_time.clear();
+    t->host_time.shrink_to_fit();
+    return out;
+}
+
 u64 g_prof_filtered0 = 0;
 u64 g_prof_insns0 = 0, g_prof_reads0 = 0, g_prof_excl0 = 0;
 void profile_begin() {
@@ -685,6 +740,22 @@ void trace_calls_end(const char* label) {
     std::string line;
     for (auto& [n, k] : v) line += k + " x" + std::to_string(n) + ", ";
     LOGI("calls during %s: %s", label, line.c_str());
+}
+
+bool thread_waiting(u32 id) {
+    std::lock_guard lk(g_threads_mutex);
+    for (GuestThread* t : g_threads) {
+        if (t->id != id) continue;
+        const char* th = t->in_thunk;
+        if (!th) return false;  // running game code
+        static const char* const kWaits[] = {"pthread_cond_wait", "pthread_cond_timedwait", "usleep", "nanosleep",
+                                             "sleep", "sem_wait", "sem_timedwait", "pthread_join", "syscall",
+                                             "epoll_wait", "poll", "select"};
+        for (const char* w : kWaits)
+            if (std::strncmp(th, w, std::strlen(w)) == 0) return true;
+        return false;
+    }
+    return true;  // not attached (yet / any more)
 }
 
 void dump_threads() {
