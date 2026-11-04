@@ -477,6 +477,12 @@ cmake --build build-switch -j
 El resultado es `build-switch/NFSMostWanted2012-0.3.1.nro`. Los detalles están en
 [docs/BUILDING.md](docs/BUILDING.md) (en inglés).
 
+## Apoyo
+
+Si te gusta este port, puedes apoyar mi trabajo en Ko-fi. ¡Me ayuda a seguir actualizando mis ports y crear nuevos!
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/S4I32A0WMU)
+
 ## Créditos
 
 Gracias a quienes hicieron posible este proyecto:
