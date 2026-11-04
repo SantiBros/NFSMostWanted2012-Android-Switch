@@ -17,8 +17,11 @@ folder, and race through Fairhaven, handheld or docked.
 ![Android version 1.3.128](https://img.shields.io/badge/Android%20version-1.3.128-2b2f38?style=for-the-badge)
 ![Atmosphère](https://img.shields.io/badge/CFW-Atmosph%C3%A8re-2b2f38?style=for-the-badge)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2b2f38?style=for-the-badge)](LICENSE)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20port-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/S4I32A0WMU)
 
 [Install](#how-to-install) · [Controls](#controls) · [FAQ](#faq) · [Troubleshooting](docs/INSTALL.md#troubleshooting) · [Changelog](CHANGELOG.md) · [How it works](docs/TECHNICAL.md)
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/S4I32A0WMU)
 
 </div>
 

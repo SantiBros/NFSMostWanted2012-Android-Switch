@@ -17,8 +17,11 @@ en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
 ![Versión Android 1.3.128](https://img.shields.io/badge/versi%C3%B3n%20Android-1.3.128-2b2f38?style=for-the-badge)
 ![Atmosphère](https://img.shields.io/badge/CFW-Atmosph%C3%A8re-2b2f38?style=for-the-badge)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-2b2f38?style=for-the-badge)](LICENSE)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-apoya%20el%20port-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/S4I32A0WMU)
 
 [Instalar](#cómo-instalar) · [Controles](#controles) · [Preguntas frecuentes](#preguntas-frecuentes) · [Solución de problemas](docs/INSTALL.es.md#solución-de-problemas) · [Cambios](CHANGELOG.md)
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/S4I32A0WMU)
 
 </div>
 
