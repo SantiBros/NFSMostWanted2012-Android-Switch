@@ -377,3 +377,9 @@ robin-map, Boost and stb (see LICENSES.txt), and the devkitPro toolchain.
 Need for Speed and Most Wanted are trademarks of Electronic Arts Inc. Nintendo
 Switch is a trademark of Nintendo. This project is not affiliated with or
 endorsed by either company. Please support the original game.
+
+
+SUPPORT
+-------
+The port is free. If you enjoy it, you can support its development at
+https://ko-fi.com/santibros

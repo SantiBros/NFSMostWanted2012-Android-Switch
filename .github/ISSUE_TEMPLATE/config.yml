@@ -3,3 +3,9 @@ contact_links:
   - name: Installation help and troubleshooting
     url: https://github.com/SantiBros/NFSMostWanted2012-Android-Switch/blob/main/docs/INSTALL.md#troubleshooting
     about: The most common problems and how to fix them. Please check here first.
+  - name: Ayuda de instalación y solución de problemas (español)
+    url: https://github.com/SantiBros/NFSMostWanted2012-Android-Switch/blob/main/docs/INSTALL.es.md#solución-de-problemas
+    about: Los problemas más comunes y cómo resolverlos.
+  - name: Support SantiBros on Ko-fi
+    url: https://ko-fi.com/santibros
+    about: Enjoying the port? You can support its development here.
