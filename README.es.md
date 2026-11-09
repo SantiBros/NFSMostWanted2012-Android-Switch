@@ -25,6 +25,14 @@ en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
 
 <img src="docs/images/thanks-1000.es.jpg" width="100%" alt="Un logro de la comunidad: 1000 descargas. ¡Gracias! A todos los que jugaron el port, lo probaron en su consola, reportaron un error con su log.txt o lo compartieron: este logro es de ustedes.">
 
+**¡Gracias, pilotos! 🏁**<br>
+Versión tras versión, el port ya superó las 1000 descargas. Cada `log.txt`, cada prueba en otra
+consola, cada foto de un error y cada vez que lo compartieron hicieron mejor la siguiente versión.
+
+Si estás disfrutando el port, una ⭐ en este repositorio ayuda a que más jugadores lo encuentren. Y si
+algo falla, abre un [issue](../../issues) con tu `log.txt`: así empieza la siguiente corrección.<br>
+**¡Nos vemos en las calles de Fairhaven!**
+
 </div>
 
 > [!IMPORTANT]

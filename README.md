@@ -25,6 +25,14 @@ folder, and race through Fairhaven, handheld or docked.
 
 <img src="docs/images/thanks-1000.jpg" width="100%" alt="Community milestone: 1,000 downloads. Thank you! To everyone who played the port, tested it on their console, reported a bug with their log.txt or shared it: this milestone is yours.">
 
+**Thank you, racers! 🏁**<br>
+Release after release, the port has now been downloaded more than 1,000 times. Every `log.txt`,
+every test on another console, every photo of a bug and every share made the next version better.
+
+If you're enjoying the port, a ⭐ on this repository helps more players find it. And if something
+breaks, open an [issue](../../issues) with your `log.txt`: that's where the next fix begins.<br>
+**See you on the streets of Fairhaven!**
+
 </div>
 
 > [!IMPORTANT]
