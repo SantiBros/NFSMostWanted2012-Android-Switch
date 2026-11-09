@@ -23,7 +23,7 @@ folder, and race through Fairhaven, handheld or docked.
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/S4I32A0WMU)
 
-<img src="docs/images/thanks-1000.jpg" width="100%" alt="Community milestone: 1,000 downloads. Thank you! To everyone who played the port, tested it on their console, reported a bug with their log.txt or shared it: this milestone is yours.">
+<img src="docs/images/thanks-1000.jpg" width="100%" alt="Community milestone: 1,000+ downloads and counting. Thank you! To everyone who played the port, tested it on their console, reported a bug with their log.txt or shared it: this milestone is yours.">
 
 **Thank you, racers! 🏁**<br>
 Release after release, the port has now been downloaded more than 1,000 times. Every `log.txt`,
