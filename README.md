@@ -23,6 +23,10 @@ folder, and race through Fairhaven, handheld or docked.
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/S4I32A0WMU)
 
+**🏁 Thank you for 1,000 downloads!**<br>
+To everyone who played the port, tested it on their console, reported a bug with their `log.txt`
+or shared it with others: thank you. This port keeps getting better because of you.
+
 </div>
 
 > [!IMPORTANT]
