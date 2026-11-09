@@ -224,11 +224,12 @@ bool gl_screenshot(const std::string& path) {
 // NFSMW_CONTROL=<dir> drives the game interactively instead: lines appended to
 // <dir>/cmd.txt run one after another ("press A [frames]", "tap x y",
 // "stick x y frames", "rstick x y frames", "wait frames", "shot name" ->
-// <dir>/name.png). <dir>/status shows the current frame and queue length.
+// <dir>/name.png; "with <command>" runs it together with the next one). <dir>/status shows the current frame and queue length.
 namespace {
 struct ScriptEvent {
     int frame, duration;
     enum { Tap, Press, Stick, RStick, Shot, Wait, Cmd, Tilt } kind;
+    bool with_next = false;  // "with <command>": runs together with the next command
     float x, y;
     unsigned button;
     std::string name;
@@ -326,7 +327,11 @@ void control_poll(int f) {
             g_ctl_offset = std::ftell(fp);
             g_ctl_lines++;
             ScriptEvent e{};
-            if (parse_event(line, e)) g_queue.push_back(e);
+            const bool with = !std::strncmp(line, "with ", 5);
+            if (parse_event(with ? line + 5 : line, e)) {
+                e.with_next = with;
+                g_queue.push_back(e);
+            }
             else if (line[0] != '\n' && line[0] != '#') LOGW("control: cannot parse '%s'", line);
         }
         std::fclose(fp);
@@ -350,6 +355,10 @@ void control_poll(int f) {
             g_pending_shot = g_ctl_dir + "/" + e.name + ".png";
             g_queue_next_frame = f + 1;
             break;
+        }
+        if (e.with_next && e.kind != ScriptEvent::Wait) {
+            g_script.push_back(e);  // the next command starts in the same frame
+            continue;
         }
         g_queue_next_frame = f + e.duration + (e.kind == ScriptEvent::Wait ? 0 : 2);
         if (e.kind != ScriptEvent::Wait) g_script.push_back(e);
@@ -468,6 +477,70 @@ bool memory_usage(u64& used, u64& total) {
 }
 AudioStats audio_stats() { return {}; }
 std::string system_info() { return ""; }
+
+// ---- fallback fonts (desktop tests) -------------------------------------------------
+const std::vector<FontBlob>& fallback_fonts() {
+    static std::vector<std::vector<unsigned char>> files;
+    static const std::vector<FontBlob> list = [] {
+        std::vector<std::pair<std::string, std::string>> want;  // "file#index", tag
+        if (const char* e = std::getenv("NFSMW_FALLBACK_FONTS")) {
+            std::string all = e;
+            for (size_t a = 0; a < all.size();) {
+                size_t b = all.find(',', a);
+                if (b == std::string::npos) b = all.size();
+                std::string item = all.substr(a, b - a);
+                const size_t eq = item.find('=');
+                if (eq != std::string::npos) want.emplace_back(item.substr(0, eq), item.substr(eq + 1));
+                a = b + 1;
+            }
+        } else {
+            const std::string noto = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc";
+            want = {{noto + "#0", "ja"}, {noto + "#1", "ko"}, {noto + "#2", "zh-hans"}, {noto + "#3", "zh-hant"},
+                    {"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf", "any"}};
+        }
+        files.reserve(want.size());
+        std::vector<FontBlob> out;
+        for (const auto& [spec, tag] : want) {
+            const size_t hash = spec.find('#');
+            const std::string path = spec.substr(0, hash);
+            const int index = hash == std::string::npos ? 0 : std::atoi(spec.c_str() + hash + 1);
+            FILE* f = std::fopen(path.c_str(), "rb");
+            if (!f) continue;
+            std::vector<unsigned char> data;
+            unsigned char buf[65536];
+            size_t n;
+            while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) data.insert(data.end(), buf, buf + n);
+            std::fclose(f);
+            // the same file for several entries (a .ttc): share one copy
+            const unsigned char* p = nullptr;
+            for (auto& existing : files)
+                if (existing.size() == data.size() && existing == data) p = existing.data();
+            if (!p) {
+                files.push_back(std::move(data));
+                p = files.back().data();
+            }
+            FontBlob fb;
+            fb.data = p;
+            fb.size = 0;
+            fb.index = index;
+            fb.tag = tag;
+            fb.name = path.substr(path.rfind('/') + 1) + (hash == std::string::npos ? "" : spec.substr(hash)) + " (" + tag + ")";
+            out.push_back(fb);
+        }
+        return out;
+    }();
+    return list;
+}
+
+// ---- vibration (desktop tests: logged with NFSMW_RUMBLE_LOG=1) ----------------------
+void set_rumble(float low, float high) {
+    static const bool log = std::getenv("NFSMW_RUMBLE_LOG") != nullptr;
+    static float last_low = -1, last_high = -1;
+    if (log && (std::fabs(low - last_low) > 0.02f || std::fabs(high - last_high) > 0.02f || ((low == 0) != (last_low == 0))))
+        LOGI("rumble: low %.2f high %.2f", low, high);
+    last_low = low;
+    last_high = high;
+}
 
 }  // namespace platform
 

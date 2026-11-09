@@ -14,6 +14,7 @@
 #include "game/overlay.h"
 #include "game/perf.h"
 #include "game/prefs.h"
+#include "game/rumble.h"
 #include "hle/hle.h"
 #include "platform/thread.h"
 
@@ -230,10 +231,10 @@ void graphics_items(std::vector<Item>& out) {
               "off-screen.";
     out.push_back(aa);
 
-    Item af{Kind::Setting, "Texture filtering"};
+    Item af{Kind::Setting, "Anisotropic filtering"};
     af.field_int = &Values::anisotropy;
-    af.choices = {{1, "Standard", ""}, {2, "2x anisotropic", ""}, {4, "4x anisotropic", ""},
-                  {8, "8x anisotropic", ""}, {16, "16x anisotropic", "The most the GPU can do; a little more GPU time."}};
+    af.choices = {{1, "Off", ""}, {2, "2x", ""}, {4, "4x", ""},
+                  {8, "8x", ""}, {16, "16x", "The most the GPU can do; a little more GPU time."}};
     af.help = "Keeps textures sharp when seen at a slant: the road ahead, building walls, the track on the map. "
               "Cheap for the GPU.";
     out.push_back(af);
@@ -278,6 +279,14 @@ void controls_items(std::vector<Item>& out) {
     gi.choices = {{0, "Off", ""}, {1, "On", ""}};
     gi.help = "Turn on if the car steers the wrong way when you tilt.";
     out.push_back(gi);
+
+    Item vib{Kind::Setting, "Vibration"};
+    vib.field_int = &Values::vibration;
+    vib.choices = {{prefs::kVibrationOff, "Off", ""}, {prefs::kVibrationLow, "Low", ""},
+                   {prefs::kVibrationNormal, "Normal", ""}, {prefs::kVibrationStrong, "Strong", ""}};
+    vib.help = "The controller rumbles in races: crashes, takedowns, nitro. The Android game has no vibration; "
+               "the port takes it from the game's own camera shakes.";
+    out.push_back(vib);
 
     Item snd{Kind::Setting, "Sound volume"};
     snd.field_int = &Values::sound_volume;
@@ -385,6 +394,7 @@ void changed(const Item& it) {
         it.field_bool == &Values::gyro_invert)
         motion::reset();
     if (!it.restart) perf::apply();
+    if (it.field_int == &Values::vibration) rumble::test_pulse();  // feel the new strength
 }
 
 void set_index(Item& it, int idx) {

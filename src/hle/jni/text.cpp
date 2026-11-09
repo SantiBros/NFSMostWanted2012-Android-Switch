@@ -1,6 +1,7 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "hle/jni/text.h"
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <map>
@@ -19,6 +20,7 @@ namespace {
 struct Font {
     std::vector<u8> data;
     stbtt_fontinfo info{};
+    std::string tag;  // fallback fonts: script they are for ("ja", "ko", "zh-hans", "zh-hant", "any")
 };
 
 struct Paint {
@@ -56,6 +58,115 @@ std::shared_ptr<Font> default_font() {
     return f;
 }
 
+// ---- fallback fonts (0.3.2) -------------------------------------------------------
+// The game's own fonts (Gotham) only have Latin letters. On a phone, Android
+// draws anything else (the language menu's 日本語, 한국어, 中文, Русский...)
+// with the system's fonts; here the Switch's own fonts do it (the shared fonts
+// every game can use), so no font is shipped with the port.
+const std::vector<std::shared_ptr<Font>>& fallbacks() {
+    static const std::vector<std::shared_ptr<Font>> list = [] {
+        std::vector<std::shared_ptr<Font>> out;
+        for (const auto& b : platform::fallback_fonts()) {
+            auto f = std::make_shared<Font>();
+            const int off = stbtt_GetFontOffsetForIndex(b.data, b.index);
+            if (off < 0 || !stbtt_InitFont(&f->info, b.data, off)) {
+                LOGW("fallback font %s could not be read", b.name.c_str());
+                continue;
+            }
+            f->tag = b.tag;
+            out.push_back(f);
+        }
+        std::string names;
+        for (const auto& b : platform::fallback_fonts()) names += (names.empty() ? "" : ", ") + b.name;
+        LOGI("fallback fonts for text the game's fonts cannot show: %s", names.empty() ? "none" : names.c_str());
+        return out;
+    }();
+    return list;
+}
+
+bool has_glyph(const Font* f, u32 cp) { return f && stbtt_FindGlyphIndex(&f->info, (int)cp) != 0; }
+
+bool is_kana(u32 c) { return (c >= 0x3040 && c <= 0x30FF) || (c >= 0x31F0 && c <= 0x31FF) || (c >= 0xFF66 && c <= 0xFF9F); }
+bool is_hangul(u32 c) { return (c >= 0xAC00 && c <= 0xD7AF) || (c >= 0x1100 && c <= 0x11FF) || (c >= 0x3130 && c <= 0x318F); }
+bool is_han(u32 c) { return (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0xF900 && c <= 0xFAFF); }
+
+// Fallback fonts in the order that suits one piece of text: Japanese kanji in
+// a Japanese font, Korean in a Korean one, and Chinese in the Traditional or
+// Simplified font that has every character of the text.
+std::vector<const Font*> fallback_order(const std::vector<u32>& cps) {
+    bool kana = false, hangul = false;
+    std::vector<u32> han;
+    for (u32 c : cps) {
+        kana = kana || is_kana(c);
+        hangul = hangul || is_hangul(c);
+        if (is_han(c)) han.push_back(c);
+    }
+    std::vector<std::string> pref;
+    if (kana) pref = {"ja"};
+    else if (hangul) pref = {"ko"};
+    else if (!han.empty()) {
+        auto covers = [&](const std::string& tag) {
+            for (const auto& f : fallbacks()) {
+                if (f->tag != tag) continue;
+                bool all = true;
+                for (u32 c : han) all = all && has_glyph(f.get(), c);
+                if (all) return true;
+            }
+            return false;
+        };
+        pref = covers("zh-hant") ? std::vector<std::string>{"zh-hant", "zh-hans"} : std::vector<std::string>{"zh-hans", "zh-hant"};
+    }
+    std::vector<const Font*> out;
+    for (const auto& tag : pref)
+        for (const auto& f : fallbacks())
+            if (f->tag == tag) out.push_back(f.get());
+    for (const auto& f : fallbacks())
+        if (std::find(out.begin(), out.end(), f.get()) == out.end()) out.push_back(f.get());
+    return out;
+}
+
+struct Glyph {
+    const Font* font = nullptr;
+    int index = 0;      // glyph index in that font (0: none)
+    float scale = 0;    // font units -> pixels
+};
+
+// Which font draws each character: the paint's own font when it has the
+// character, else the first fallback font that does.
+std::vector<Glyph> layout(const Paint* p, const std::vector<u32>& cps) {
+    std::vector<Glyph> out(cps.size());
+    const Font* own = p ? p->font.get() : nullptr;
+    const float size = p ? p->size : 16.f;
+    std::vector<const Font*> order;
+    bool ordered = false;
+    for (size_t i = 0; i < cps.size(); i++) {
+        Glyph& g = out[i];
+        if (own) {
+            g.index = stbtt_FindGlyphIndex(&own->info, (int)cps[i]);
+            if (g.index || cps[i] < 0x80 || !fallbacks().size()) {
+                g.font = own;
+                g.scale = stbtt_ScaleForMappingEmToPixels(&own->info, size);
+                continue;
+            }
+        }
+        if (!ordered) order = fallback_order(cps), ordered = true;
+        for (const Font* f : order) {
+            const int gi = stbtt_FindGlyphIndex(&f->info, (int)cps[i]);
+            if (gi) {
+                g.font = f;
+                g.index = gi;
+                g.scale = stbtt_ScaleForMappingEmToPixels(&f->info, size);
+                break;
+            }
+        }
+        if (!g.font && own) {  // nobody has it: the paint's font draws its "missing" box
+            g.font = own;
+            g.scale = stbtt_ScaleForMappingEmToPixels(&own->info, size);
+        }
+    }
+    return out;
+}
+
 std::vector<u32> utf8_decode(const std::string& s) {
     std::vector<u32> out;
     for (size_t i = 0; i < s.size();) {
@@ -87,18 +198,23 @@ jref make_paint(std::shared_ptr<Font> f, float size) {
     return o;
 }
 
+// Pen advance after glyph i (with kerning towards the next one in the same font).
+float advance(const std::vector<Glyph>& gs, size_t i) {
+    const Glyph& g = gs[i];
+    if (!g.font) return 0;
+    int adv, lsb;
+    stbtt_GetGlyphHMetrics(&g.font->info, g.index, &adv, &lsb);
+    float a = adv * g.scale;
+    if (i + 1 < gs.size() && gs[i + 1].font == g.font)
+        a += g.scale * stbtt_GetGlyphKernAdvance(&g.font->info, g.index, gs[i + 1].index);
+    return a;
+}
+
 float measure(Paint* p, const std::string& s) {
-    if (!p || !p->font) return (float)s.size() * (p ? p->size : 16) * 0.5f;
-    auto& info = p->font->info;
-    float scale = stbtt_ScaleForMappingEmToPixels(&info, p->size);
+    if (!p || (!p->font && fallbacks().empty())) return (float)s.size() * (p ? p->size : 16) * 0.5f;
+    const auto gs = layout(p, utf8_decode(s));
     float w = 0;
-    auto cps = utf8_decode(s);
-    for (size_t i = 0; i < cps.size(); i++) {
-        int adv, lsb;
-        stbtt_GetCodepointHMetrics(&info, (int)cps[i], &adv, &lsb);
-        w += adv * scale;
-        if (i + 1 < cps.size()) w += scale * stbtt_GetCodepointKernAdvance(&info, (int)cps[i], (int)cps[i + 1]);
-    }
+    for (size_t i = 0; i < gs.size(); i++) w += advance(gs, i);
     return w;
 }
 
@@ -107,6 +223,8 @@ jref make_bitmap(u32 w, u32 h) {
     Object* o = get(b);
     o->data = mem::heap_calloc(w * h, 4);
     o->length = w * h * 4;
+    o->owns_data = true;  // freed with the bitmap (0.3.2; before, every text bitmap stayed for good)
+    note_alloc((u64)w * h * 4);
     o->fields["width"] = Value::I((s32)w);
     o->fields["height"] = Value::I((s32)h);
     return b;
@@ -114,22 +232,21 @@ jref make_bitmap(u32 w, u32 h) {
 
 void draw_string(jref bitmap, Paint* p, const std::string& s, int x, int y) {
     u32 bw, bh, px;
-    if (!p || !p->font || !bitmap_info(bitmap, bw, bh, px)) return;
-    auto& info = p->font->info;
-    float scale = stbtt_ScaleForMappingEmToPixels(&info, p->size);
+    if (!p || (!p->font && fallbacks().empty()) || !bitmap_info(bitmap, bw, bh, px)) return;
     float pen = (float)x;
-    auto cps = utf8_decode(s);
+    const auto gs = layout(p, utf8_decode(s));
     u8* pixels = mem::host(px);
-    for (size_t i = 0; i < cps.size(); i++) {
-        int adv, lsb;
-        stbtt_GetCodepointHMetrics(&info, (int)cps[i], &adv, &lsb);
+    for (size_t i = 0; i < gs.size(); i++) {
+        if (!gs[i].font) continue;
+        const stbtt_fontinfo& info = gs[i].font->info;
+        const float scale = gs[i].scale;
         int x0, y0, x1, y1;
         float sx = pen - std::floor(pen);
-        stbtt_GetCodepointBitmapBoxSubpixel(&info, (int)cps[i], scale, scale, sx, 0, &x0, &y0, &x1, &y1);
+        stbtt_GetGlyphBitmapBoxSubpixel(&info, gs[i].index, scale, scale, sx, 0, &x0, &y0, &x1, &y1);
         int gw = x1 - x0, gh = y1 - y0;
         if (gw > 0 && gh > 0) {
             std::vector<u8> g((size_t)gw * gh);
-            stbtt_MakeCodepointBitmapSubpixel(&info, g.data(), gw, gh, gw, scale, scale, sx, 0, (int)cps[i]);
+            stbtt_MakeGlyphBitmapSubpixel(&info, g.data(), gw, gh, gw, scale, scale, sx, 0, gs[i].index);
             int ox = (int)std::floor(pen) + x0, oy = y + y0;
             for (int yy = 0; yy < gh; yy++) {
                 int ty = oy + yy;
@@ -145,8 +262,7 @@ void draw_string(jref bitmap, Paint* p, const std::string& s, int x, int y) {
                 }
             }
         }
-        pen += adv * scale;
-        if (i + 1 < cps.size()) pen += scale * stbtt_GetCodepointKernAdvance(&info, (int)cps[i], (int)cps[i + 1]);
+        pen += advance(gs, i);
     }
 }
 

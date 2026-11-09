@@ -39,4 +39,9 @@ bool inflate_raw(const void* in, size_t in_len, void* out, size_t out_len);
 // Decode a PNG file in memory into 8-bit RGBA, top row first.
 bool decode_png(const void* png, size_t len, std::vector<u8>& rgba, int& width, int& height);
 
+// The game's launcher icon (PNG files) from the player's APK or bundle in the
+// game folder: the two layers of the adaptive icon when the APK has them, and
+// the plain icon. False when no APK there has an icon.
+bool game_icon_files(std::vector<u8>& background, std::vector<u8>& foreground, std::vector<u8>& plain);
+
 }  // namespace game::setup

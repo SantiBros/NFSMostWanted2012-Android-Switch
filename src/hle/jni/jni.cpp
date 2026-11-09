@@ -1,8 +1,12 @@
 #include "hle/jni/jni.h"
 
+#include <chrono>
+#include <cstdlib>
+#include <deque>
 #include <mutex>
 #include <unordered_set>
 
+#include "core/cpu.h"
 #include "core/elf.h"
 #include "hle/hle.h"
 #include "hle/jni/jni_table.h"
@@ -22,10 +26,109 @@ std::unordered_map<std::string, Impl> g_impls;  // "cls|name|sig"
 u32 g_env = 0, g_vm = 0;
 thread_local jref t_exception = 0;
 
+// ---- object lifetime (see jni.h) ------------------------------------------------
+struct ThreadRefs {
+    std::vector<jref> locals;    // 0 = deleted
+    std::vector<size_t> frames;  // locals.size() when each frame began
+};
+std::unordered_map<u32, ThreadRefs> g_thread_refs;  // guest thread id -> local references
+std::unordered_map<jref, u32> g_global_refs;        // global (and weak global) reference counts
+std::vector<u32> g_live;                            // indices of objects alive after the last pass
+std::vector<u32> g_new;                             // indices of objects made since then
+// Freed slots are reused only after kQuarantine more passes, so a handle the
+// game still held by mistake points at nothing rather than at a new object.
+constexpr u32 kQuarantine = 32;
+std::deque<std::pair<u32, u32>> g_freed_slots;  // (index, pass it was freed in)
+std::vector<u32> g_free_slots;
+bool g_gc_enabled = false;
+u32 g_gc_pass = 0;
+u64 g_new_bytes = 0;  // game heap owned by objects made since the last pass
+GcStats g_stats;
+std::chrono::steady_clock::time_point g_last_pass;
+
+bool gc_disabled() {
+    static const bool off = std::getenv("NFSMW_NO_JNI_GC") != nullptr;
+    return off;
+}
+
 jref add_object(Object* o) {
     std::lock_guard lk(g_mutex);
-    g_objects.push_back(o);
-    return OBJ_BASE + (u32)(g_objects.size() - 1) * 4;
+    o->born = g_gc_pass;
+    u32 idx;
+    if (!g_free_slots.empty()) {
+        idx = g_free_slots.back();
+        g_free_slots.pop_back();
+        g_objects[idx] = o;
+    } else {
+        g_objects.push_back(o);
+        idx = (u32)(g_objects.size() - 1);
+    }
+    g_new.push_back(idx);
+    g_stats.objects++;
+    return OBJ_BASE + idx * 4;
+}
+
+// The object a value refers to, if it is a live object handle.
+Object* object_at(u64 v) {
+    if (v < OBJ_BASE || v > 0xFFFFFFFFull || (v - OBJ_BASE) % 4) return nullptr;
+    const u64 i = (v - OBJ_BASE) / 4;
+    return i < g_objects.size() ? g_objects[i] : nullptr;
+}
+
+u32 current_thread_id() { return cpu::current().id; }
+
+// A reference handed to the game's native code: valid until DeleteLocalRef or
+// the end of the native call (JNI local reference).
+void add_local(jref r) {
+    if (r < OBJ_BASE) return;
+    std::lock_guard lk(g_mutex);
+    auto& tr = g_thread_refs[current_thread_id()];
+    tr.locals.push_back(r);
+    if (tr.locals.size() == 200000) LOGW("JNI: thread %u holds 200000 local references", current_thread_id());
+}
+
+void delete_local(jref r) {
+    if (r < OBJ_BASE) return;
+    std::lock_guard lk(g_mutex);
+    auto it = g_thread_refs.find(current_thread_id());
+    if (it == g_thread_refs.end()) return;
+    auto& tr = it->second;
+    const size_t top = tr.frames.empty() ? 0 : tr.frames.back();
+    for (size_t i = tr.locals.size(); i-- > 0;) {
+        if (tr.locals[i] != r) continue;
+        if (i >= top) tr.locals.erase(tr.locals.begin() + (ptrdiff_t)i);  // no frame mark above it
+        else tr.locals[i] = 0;
+        return;
+    }
+}
+
+// Native call frames: the references made inside one end with it.
+size_t push_frame() {
+    std::lock_guard lk(g_mutex);
+    auto& tr = g_thread_refs[current_thread_id()];
+    tr.frames.push_back(tr.locals.size());
+    return tr.frames.size() - 1;
+}
+void pop_frame(size_t depth) {
+    std::lock_guard lk(g_mutex);
+    auto it = g_thread_refs.find(current_thread_id());
+    if (it == g_thread_refs.end()) return;
+    auto& tr = it->second;
+    if (depth >= tr.frames.size()) return;
+    const size_t mark = tr.frames[depth];
+    if (tr.locals.size() > mark) tr.locals.resize(mark);
+    tr.frames.resize(depth);
+}
+
+void global_ref(jref r, int delta) {
+    if (r < OBJ_BASE) return;
+    std::lock_guard lk(g_mutex);
+    if (delta > 0) {
+        g_global_refs[r]++;
+        return;
+    }
+    auto it = g_global_refs.find(r);
+    if (it != g_global_refs.end() && --it->second == 0) g_global_refs.erase(it);
 }
 u32 add_id(void* p) {
     std::lock_guard lk(g_mutex);
@@ -155,6 +258,7 @@ void set_ret(cpu::GuestThread& t, char type, Value v) {
     case 'S': r[0] = (u32)(s32)(s16)v.raw; break;
     case 'J': case 'D': r[0] = (u32)v.raw; r[1] = (u32)(v.raw >> 32); break;
     case 'V': break;
+    case 'L': r[0] = (u32)v.raw; add_local((u32)v.raw); break;
     default: r[0] = (u32)v.raw; break;
     }
 }
@@ -214,6 +318,7 @@ thunks::Fn make_new_object(Mode mode) {
                 m->impl(call);
             }
         }
+        add_local(obj);
         t.regs()[0] = obj;
     };
 }
@@ -292,7 +397,11 @@ void register_env_functions(std::unordered_map<std::string, thunks::Fn>& fns) {
     for (int i = 0; i < 8; i++) {
         std::string T = kPrimTypes[i];
         char c = kPrimChars[i];
-        fns["New" + T + "Array"] = [c](cpu::GuestThread& t) { t.regs()[0] = new_array(c, t.regs()[1]); };
+        fns["New" + T + "Array"] = [c](cpu::GuestThread& t) {
+            const jref a = new_array(c, t.regs()[1]);
+            add_local(a);
+            t.regs()[0] = a;
+        };
         fns["Get" + T + "ArrayElements"] = [](cpu::GuestThread& t) {
             auto& r = t.regs();
             Object* o = get(r[1]);
@@ -329,32 +438,45 @@ void register_env_functions(std::unordered_map<std::string, thunks::Fn>& fns) {
     F("ToReflectedField", +[](u32, u32, u32, u32) -> u32 { return 0; });
     F("GetSuperclass", +[](u32, u32) -> u32 { return find_class("java/lang/Object")->handle; });
     F("IsAssignableFrom", +[](u32, u32, u32) -> u32 { return 1; });
-    F("Throw", +[](u32, u32 obj) -> s32 { t_exception = obj; return 0; });
+    F("Throw", +[](u32, u32 obj) -> s32 { t_exception = obj; add_local(obj); return 0; });
     F("ThrowNew", +[](u32, u32 cls, u32 msg) -> s32 {
         Class* c = class_of(cls);
         throw_new(c ? c->name : "java/lang/Exception", msg ? mem::str(msg) : "");
         return 0;
     });
-    F("ExceptionOccurred", +[](u32) -> u32 { return t_exception; });
+    F("ExceptionOccurred", +[](u32) -> u32 { add_local(t_exception); return t_exception; });
     F("ExceptionDescribe", +[](u32) {
         if (Object* o = get(t_exception)) LOGW("JNI exception pending: %s", o->cls->name.c_str());
     });
     F("ExceptionClear", +[](u32) { t_exception = 0; });
     F("ExceptionCheck", +[](u32) -> u32 { return t_exception ? 1 : 0; });
     F("FatalError", +[](u32, u32 msg) { fatal("JNI FatalError: %s", mem::str(msg)); });
-    F("PushLocalFrame", +[](u32, s32) -> s32 { return 0; });
-    F("PopLocalFrame", +[](u32, u32 res) -> u32 { return res; });
-    F("NewGlobalRef", +[](u32, u32 o) -> u32 { return o; });
-    F("DeleteGlobalRef", +[](u32, u32) {});
-    F("DeleteLocalRef", +[](u32, u32) {});
-    F("NewLocalRef", +[](u32, u32 o) -> u32 { return o; });
-    F("NewWeakGlobalRef", +[](u32, u32 o) -> u32 { return o; });
-    F("DeleteWeakGlobalRef", +[](u32, u32) {});
+    F("PushLocalFrame", +[](u32, s32) -> s32 { push_frame(); return 0; });
+    F("PopLocalFrame", +[](u32, u32 res) -> u32 {
+        size_t depth = 0;
+        {
+            std::lock_guard lk(g_mutex);
+            auto& tr = g_thread_refs[current_thread_id()];
+            depth = tr.frames.empty() ? 0 : tr.frames.size() - 1;
+        }
+        pop_frame(depth);
+        add_local(res);
+        return res;
+    });
+    F("NewGlobalRef", +[](u32, u32 o) -> u32 { global_ref(o, +1); return o; });
+    F("DeleteGlobalRef", +[](u32, u32 o) { global_ref(o, -1); });
+    F("DeleteLocalRef", +[](u32, u32 o) { delete_local(o); });
+    F("NewLocalRef", +[](u32, u32 o) -> u32 { add_local(o); return o; });
+    // Weak references are kept as strong ones: nothing here notices memory pressure.
+    F("NewWeakGlobalRef", +[](u32, u32 o) -> u32 { global_ref(o, +1); return o; });
+    F("DeleteWeakGlobalRef", +[](u32, u32 o) { global_ref(o, -1); });
     F("EnsureLocalCapacity", +[](u32, s32) -> s32 { return 0; });
     F("IsSameObject", +[](u32, u32 a, u32 b) -> u32 { return a == b; });
     F("AllocObject", +[](u32, u32 cls) -> u32 {
         Class* c = class_of(cls);
-        return new_object(c ? c : find_class("java/lang/Object"));
+        const jref o = new_object(c ? c : find_class("java/lang/Object"));
+        add_local(o);
+        return o;
     });
     F("GetObjectClass", +[](u32, u32 obj) -> u32 {
         Object* o = get(obj);
@@ -407,9 +529,15 @@ void register_env_functions(std::unordered_map<std::string, thunks::Fn>& fns) {
             else if (cp < 0x10000) { s += (char)(0xE0 | (cp >> 12)); s += (char)(0x80 | ((cp >> 6) & 0x3F)); s += (char)(0x80 | (cp & 0x3F)); }
             else { s += (char)(0xF0 | (cp >> 18)); s += (char)(0x80 | ((cp >> 12) & 0x3F)); s += (char)(0x80 | ((cp >> 6) & 0x3F)); s += (char)(0x80 | (cp & 0x3F)); }
         }
-        return new_string(s);
+        const jref r = new_string(s);
+        add_local(r);
+        return r;
     });
-    F("NewStringUTF", +[](u32, u32 s) -> u32 { return s ? new_string(mem::str(s)) : 0; });
+    F("NewStringUTF", +[](u32, u32 s) -> u32 {
+        const jref r = s ? new_string(mem::str(s)) : 0;
+        add_local(r);
+        return r;
+    });
     F("GetStringUTFLength", +[](u32, u32 s) -> s32 { return (s32)get_string(s).size(); });
     F("GetStringUTFChars", +[](u32, u32 s, u32 is_copy) -> u32 {
         if (is_copy) mem::w8(is_copy, 1);
@@ -480,11 +608,14 @@ void register_env_functions(std::unordered_map<std::string, thunks::Fn>& fns) {
         jref a = new_array('L', (u32)len);
         Object* o = get(a);
         for (s32 i = 0; i < len; i++) mem::w32(o->data + i * 4, init);
+        add_local(a);
         return a;
     });
     F("GetObjectArrayElement", +[](u32, u32 a, s32 i) -> u32 {
         Object* o = get(a);
-        return o && (u32)i < o->length ? mem::r32(o->data + i * 4) : 0;
+        const u32 r = o && (u32)i < o->length ? mem::r32(o->data + i * 4) : 0;
+        add_local(r);
+        return r;
     });
     F("SetObjectArrayElement", +[](u32, u32 a, s32 i, u32 v) {
         Object* o = get(a);
@@ -510,8 +641,9 @@ void register_env_functions(std::unordered_map<std::string, thunks::Fn>& fns) {
     F("GetJavaVM", +[](u32, u32 out) -> s32 { mem::w32(out, g_vm); return 0; });
     F("NewDirectByteBuffer", +[](u32, u32 addr, s64 cap) -> u32 {
         jref b = new_object("java/nio/ByteBuffer");
-        get(b)->data = addr;
+        get(b)->data = addr;  // the game's memory: not freed with the object
         get(b)->length = (u32)cap;
+        add_local(b);
         return b;
     });
     F("GetDirectBufferAddress", +[](u32, u32 b) -> u32 { Object* o = get(b); return o ? o->data : 0; });
@@ -583,6 +715,8 @@ jref new_array(char e, u32 len) {
     o->elem = e;
     o->length = len;
     o->data = mem::heap_calloc(len ? len : 1, elem_size(e));
+    o->owns_data = true;
+    note_alloc((u64)(len ? len : 1) * elem_size(e));
     return add_object(o);
 }
 
@@ -610,6 +744,7 @@ void throw_new(const std::string& cls, const std::string& msg) {
     jref e = new_object(cls);
     set_field(e, "message", Value::L(new_string(msg)));
     t_exception = e;
+    add_local(e);
     LOGD("JNI: throwing %s(%s)", cls.c_str(), msg.c_str());
 }
 
@@ -645,6 +780,16 @@ Value call_native(const std::string& cls, const std::string& name, const std::st
     std::vector<char> params;
     char ret = 'V';
     parse_sig(sig, params, ret);
+    // A Java -> native call: the receiver and object arguments are local
+    // references of this call, and everything the native code makes ends with it.
+    const size_t depth = push_frame();
+    struct FrameEnd {
+        size_t depth;
+        ~FrameEnd() { pop_frame(depth); }
+    } frame_end{depth};
+    add_local(thiz);
+    for (size_t i = 0; i < args.size() && i < params.size(); i++)
+        if (params[i] == 'L') add_local((u32)args[i].raw);
     std::vector<u32> words{g_env, thiz ? thiz : find_class(cls)->handle};
     for (size_t i = 0; i < args.size(); i++) {
         char p = i < params.size() ? params[i] : 'I';
@@ -659,6 +804,132 @@ Value call_native(const std::string& cls, const std::string& name, const std::st
     u64 r = cpu::current().call(fn, words.data(), words.size());
     if (ret == 'J' || ret == 'D') return Value{r};
     return Value{(u64)(u32)r};
+}
+
+// ---- object lifetime --------------------------------------------------------------
+void pin(jref r) {
+    std::lock_guard lk(g_mutex);
+    if (Object* o = object_at(r)) o->pinned = true;
+}
+
+void note_alloc(u64 bytes) {
+    std::lock_guard lk(g_mutex);
+    g_new_bytes += bytes;
+}
+
+void thread_ended(u32 thread_id) {
+    std::lock_guard lk(g_mutex);
+    g_thread_refs.erase(thread_id);
+}
+
+GcStats gc_stats() {
+    std::lock_guard lk(g_mutex);
+    GcStats s = g_stats;
+    s.objects = g_live.size() + g_new.size();  // including those made since the last pass
+    s.data_bytes += g_new_bytes;
+    return s;
+}
+
+void collect_garbage(bool force) {
+    if (gc_disabled()) return;
+    std::lock_guard lk(g_mutex);
+    const auto now = std::chrono::steady_clock::now();
+    if (!g_gc_enabled) {
+        // Everything made while the game started up stays: the port's C++ code
+        // holds some of it (the activity, the asset manager...).
+        for (Object* o : g_objects)
+            if (o) o->pinned = true;
+        for (size_t i = 1; i < g_objects.size(); i++)
+            if (g_objects[i]) g_live.push_back((u32)i);
+        g_new.clear();
+        g_gc_enabled = true;
+        g_last_pass = now;
+        LOGI("JNI: freeing unused Java objects from now on (%zu objects from the start are kept)", g_live.size());
+        return;
+    }
+    // A pass when enough was made since the last one, at most once a second.
+    // NFSMW_GC_OBJECTS=<n> (tests): a pass after that many new objects.
+    static const size_t every = std::getenv("NFSMW_GC_OBJECTS") ? std::strtoul(std::getenv("NFSMW_GC_OBJECTS"), nullptr, 10) : 4000;
+    const bool due = g_new.size() >= every || g_new_bytes >= (8u << 20);
+    if (!force && (!due || now - g_last_pass < std::chrono::seconds(1))) return;
+    const u32 pass = ++g_gc_pass;
+    g_last_pass = now;
+    const auto t0 = now;
+
+    std::vector<Object*> stack;
+    auto mark = [&](u64 v) {
+        Object* o = object_at(v);
+        if (o && !o->marked) {
+            o->marked = true;
+            stack.push_back(o);
+        }
+    };
+    std::vector<u32> candidates;
+    candidates.reserve(g_live.size() + g_new.size());
+    candidates.insert(candidates.end(), g_live.begin(), g_live.end());
+    candidates.insert(candidates.end(), g_new.begin(), g_new.end());
+    for (u32 i : candidates)
+        if (Object* o = g_objects[i]) o->marked = false;
+    // Roots: kept objects, classes, objects made since the pass before this one
+    // (C++ code may hold a new one for a moment before handing it over),
+    // global and local references, static fields.
+    for (u32 i : candidates) {
+        Object* o = g_objects[i];
+        if (o && (o->pinned || o->as_class || o->born + 1 >= pass)) mark(OBJ_BASE + (u64)i * 4);
+    }
+    for (auto& [r, n] : g_global_refs) mark(r);
+    for (auto& [tid, tr] : g_thread_refs)
+        for (jref r : tr.locals) mark(r);
+    for (auto& [name, c] : g_classes)
+        for (auto& [f, v] : c->statics) mark(v.raw);
+    // Everything reachable from those. Field values and object array elements
+    // are taken as references whenever they look like one.
+    while (!stack.empty()) {
+        Object* o = stack.back();
+        stack.pop_back();
+        for (auto& [f, v] : o->fields) mark(v.raw);
+        if (o->elem == 'L' && o->data)
+            for (u32 k = 0; k < o->length; k++) mark(mem::r32(o->data + k * 4));
+    }
+    // Sweep.
+    std::vector<u32> live;
+    live.reserve(candidates.size());
+    u64 freed = 0, freed_bytes = 0, data_bytes = 0;
+    for (u32 i : candidates) {
+        Object* o = g_objects[i];
+        if (!o) continue;
+        if (o->marked) {
+            live.push_back(i);
+            if (o->owns_data && o->data) data_bytes += mem::heap_usable_size(o->data);
+            continue;
+        }
+        if (o->owns_data && o->data) {
+            freed_bytes += mem::heap_usable_size(o->data);
+            mem::heap_free(o->data);
+        }
+        delete o;
+        g_objects[i] = nullptr;
+        g_freed_slots.emplace_back(i, pass);
+        freed++;
+    }
+    while (!g_freed_slots.empty() && g_freed_slots.front().second + kQuarantine <= pass) {
+        g_free_slots.push_back(g_freed_slots.front().first);
+        g_freed_slots.pop_front();
+    }
+    g_live.swap(live);
+    g_new.clear();
+    g_new_bytes = 0;
+    g_stats.objects = g_live.size();
+    g_stats.data_bytes = data_bytes;
+    g_stats.freed_objects += freed;
+    g_stats.freed_bytes += freed_bytes;
+    g_stats.passes = pass;
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    static const bool log_all = std::getenv("NFSMW_GC_LOG") != nullptr;
+    if (log_all || freed_bytes >= (1u << 20) || pass % 30 == 0)
+        LOGI("JNI: freed %llu objects (%.1f MiB of game memory) in %.1f ms; %zu objects alive (%.1f MiB); game heap "
+             "%.1f MiB in use", (unsigned long long)freed, freed_bytes / 1048576.0, ms, g_live.size(),
+             data_bytes / 1048576.0, mem::heap_bytes_in_use() / 1048576.0);
 }
 
 void init() {
@@ -689,7 +960,7 @@ void init() {
     auto vmf = [&](int idx, const char* name, auto fn) { mem::w32(itable + idx * 4, thunks::add(std::string("JNI::VM::") + name, abi::wrap(fn))); };
     vmf(3, "DestroyJavaVM", +[](u32) -> s32 { return 0; });
     vmf(4, "AttachCurrentThread", +[](u32, u32 penv, u32) -> s32 { mem::w32(penv, g_env); return 0; });
-    vmf(5, "DetachCurrentThread", +[](u32) -> s32 { return 0; });
+    vmf(5, "DetachCurrentThread", +[](u32) -> s32 { thread_ended(current_thread_id()); return 0; });
     vmf(6, "GetEnv", +[](u32, u32 penv, s32) -> s32 { mem::w32(penv, g_env); return 0; });
     vmf(7, "AttachCurrentThreadAsDaemon", +[](u32, u32 penv, u32) -> s32 { mem::w32(penv, g_env); return 0; });
     g_vm = mem::static_alloc(8, 8);

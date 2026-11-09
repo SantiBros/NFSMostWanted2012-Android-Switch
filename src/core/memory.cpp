@@ -1,6 +1,7 @@
 #include "core/memory.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <chrono>
 #include <map>
 #include <mutex>
@@ -51,6 +52,8 @@ struct Header {
 };
 
 std::mutex g_heap_mutex;
+u64 g_heap_end = 0;                         // end of the heap area
+bool g_bottom_only = false;                 // NFSMW_HEAP_BEST_FIT=1: big blocks too from the bottom (as up to 0.3.1)
 std::map<u32, u32> g_free_by_addr;          // start -> size
 std::multimap<u32, u32> g_free_by_size;     // size -> start
 u32 g_class_free[NUM_CLASSES];
@@ -85,8 +88,42 @@ void free_insert(u32 start, u32 size) {
     g_free_by_size.emplace(size, start);
 }
 
+// Blocks this big come from the top of the heap, everything else from the
+// bottom (0.3.2, issue #1). Docked, the game loads its menu and map texture
+// packs whole (58-67 MiB each, two or three at a time) and frees them again a
+// moment later. Taken from wherever they fit best, they ended up between the
+// game's long-lived data, and after a few events no gap was big enough for
+// the next one. Android's malloc gives such blocks their own memory mapping;
+// keeping them at the top does the same here: the space they leave joins up
+// again into one free area.
+constexpr u32 kTopMin = 1u << 20;
+
+// The highest free region that holds `size` bytes aligned to `align`: the
+// block is cut from its end.
+u32 raw_alloc_top(u32 size, u32 align) {
+    for (auto it = g_free_by_addr.rbegin(); it != g_free_by_addr.rend(); ++it) {
+        const u32 start = it->first, fsize = it->second;
+        if (fsize < size) continue;
+        const u32 aligned = (start + fsize - size) & ~(align - 1);
+        if (aligned < start) continue;
+        auto range = g_free_by_size.equal_range(fsize);
+        for (auto s = range.first; s != range.second; ++s)
+            if (s->second == start) {
+                g_free_by_size.erase(s);
+                break;
+            }
+        g_free_by_addr.erase(start);
+        if (aligned > start) free_insert(start, aligned - start);
+        const u32 tail = start + fsize - (aligned + size);
+        if (tail) free_insert(aligned + size, tail);
+        return aligned;
+    }
+    return 0;
+}
+
 // Returns a raw region of exactly `size` bytes (size multiple of 16) aligned to `align`.
 u32 raw_alloc(u32 size, u32 align) {
+    if (size >= kTopMin && !g_bottom_only) return raw_alloc_top(size, align);
     auto it = g_free_by_size.lower_bound(size);
     for (; it != g_free_by_size.end(); ++it) {
         u32 start = it->second, fsize = it->first;
@@ -126,6 +163,12 @@ void init() {
     }
     std::memcpy(g_base + RUNTIME_BASE, runtime_blob, sizeof(runtime_blob));
     u64 heap_end = std::min<u64>(g_size, 0xFF000000ull);
+    // NFSMW_GUEST_MIB=1280 (desktop tests): only that much guest space for the
+    // heap, as on the Switch.
+    if (const char* lim = std::getenv("NFSMW_GUEST_MIB"))
+        heap_end = std::clamp<u64>(std::strtoull(lim, nullptr, 10) << 20, HEAP_BASE + (64u << 20), heap_end);
+    g_heap_end = heap_end;
+    g_bottom_only = std::getenv("NFSMW_HEAP_BEST_FIT") != nullptr;
     free_insert(HEAP_BASE, (u32)(heap_end - HEAP_BASE));
     LOGI("guest address space at host %p, %llu MiB, %s", (void*)g_base, (unsigned long long)(g_size >> 20),
          g_fastmem ? "fastmem" : "page table");
@@ -182,10 +225,17 @@ u32 heap_alloc(u32 size, u32 align) {
     u32 total = body + HDR + (align > 16 ? align : 0);
     total = align_up(total, 16);
     u32 block = raw_alloc(total, 16);
+    const u32 largest = g_free_by_size.empty() ? 0 : g_free_by_size.rbegin()->first;
     if (!block) {
-        LOGE("guest heap: out of memory (%u bytes requested)", size);
+        LOGE("guest heap: out of memory (%u bytes requested; %.1f MiB in use, largest free block %.1f MiB)", size,
+             g_in_use / 1048576.0, largest / 1048576.0);
         return 0;
     }
+    // The game's biggest blocks (whole texture packs while they load): one
+    // line each, to show in log.txt how close the heap came to running out.
+    if (size >= (16u << 20))
+        LOGI("guest heap: %.1f MiB block for the game (%.1f MiB in use, largest free block now %.1f MiB)",
+             size / 1048576.0, g_in_use / 1048576.0 + total / 1048576.0, largest / 1048576.0);
     u32 user = align_up(block + HDR, align);
     Header* h = hdr(user);
     h->magic = MAGIC;
@@ -264,5 +314,17 @@ u32 heap_strdup(const char* s) {
 }
 
 u64 heap_bytes_in_use() { return g_in_use; }
+
+HeapStats heap_stats() {
+    std::lock_guard lk(g_heap_mutex);
+    HeapStats st;
+    st.in_use = g_in_use;
+    st.size = g_heap_end - HEAP_BASE;
+    u64 free = 0;
+    for (const auto& [start, size] : g_free_by_addr) free += size;
+    st.taken = st.size - free;
+    st.largest_free = g_free_by_size.empty() ? 0 : g_free_by_size.rbegin()->first;
+    return st;
+}
 
 }  // namespace mem

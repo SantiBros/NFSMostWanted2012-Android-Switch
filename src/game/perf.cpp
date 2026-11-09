@@ -16,7 +16,9 @@
 #include "hle/file_cache.h"
 #include "hle/gl_queue.h"
 #include "hle/hle.h"
+#include "hle/jni/jni.h"
 #include "core/cpu.h"
+#include "core/memory.h"
 #include "core/jit_cache.h"
 #include "dynarmic/interface/compile_stats.h"
 #include "platform/thread.h"
@@ -114,10 +116,26 @@ void log_summary() {
         if (total) std::snprintf(memory, sizeof memory, "memory %llu of %llu MiB", (unsigned long long)(used >> 20), (unsigned long long)(total >> 20));
         else std::snprintf(memory, sizeof memory, "memory %llu MiB", (unsigned long long)(used >> 20));
     }
+    // The game's own heap (its malloc, shared with the Java objects the port
+    // makes for it) and those objects: both should level off, not keep growing.
+    // "taken" also counts what the allocator holds for the game's small
+    // blocks; "largest free" is the biggest single block still available.
+    char heap[160];
+    const jni::GcStats gc = jni::gc_stats();
+    const mem::HeapStats hs = mem::heap_stats();
+    std::snprintf(heap, sizeof heap,
+                  "game heap %.0f MiB in use, %.0f of %.0f MiB taken, largest free %.0f MiB, %llu Java objects (%.0f MiB)",
+                  hs.in_use / 1048576.0, hs.taken / 1048576.0, hs.size / 1048576.0, hs.largest_free / 1048576.0,
+                  (unsigned long long)gc.objects, gc.data_bytes / 1048576.0);
+    u64 tex_count = 0, tex_bytes = 0;
+    hle::texture_stats(tex_count, tex_bytes);
+    char textures[64];
+    std::snprintf(textures, sizeof textures, "GL textures %llu (%.0f MiB)", (unsigned long long)tex_count,
+                  tex_bytes / 1048576.0);
     // Threads not yet released (the Switch allows an application 96).
     const std::string threads = "threads " + std::to_string(platform::live_threads());
     std::string extra;
-    for (const std::string& part : {std::string(jit), jit_cache::summary(), hle::filecache::summary(), audio::summary(), std::string(memory), threads})
+    for (const std::string& part : {std::string(jit), jit_cache::summary(), hle::filecache::summary(), audio::summary(), std::string(memory), std::string(heap), std::string(textures), threads})
         if (!part.empty()) extra += " | " + part;
     LOGI("perf: %.1f fps (frame %.1f ms, slowest %.0f ms, %d hitches) | game %.1f ms/frame | GL thread %.0f%% busy, "
          "waited %.1f ms/frame, swap %.1f ms/frame | %.0f GL calls | %s %dx%d, detail %s, limit %s, vsync %s | %s | %s%s",

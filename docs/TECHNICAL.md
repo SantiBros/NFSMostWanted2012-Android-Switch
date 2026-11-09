@@ -9,6 +9,11 @@ Building it is in [BUILDING.md](BUILDING.md).
 - [What has been tested](#what-has-been-tested)
 - [Performance](#performance)
 - [Threads](#threads-031)
+- [Big blocks at the top of the heap](#big-blocks-at-the-top-of-the-heap-032)
+- [Java objects: freeing what the game no longer uses](#java-objects-freeing-what-the-game-no-longer-uses-032)
+- [Text in every language: the console's fonts](#text-in-every-language-the-consoles-fonts-032)
+- [Vibration](#vibration-032)
+- [The game's icon on the player's copy](#the-games-icon-on-the-players-copy-032)
 - [Online services are blocked](#online-services-are-blocked)
 - [Resolution](#resolution)
 - [The Switch's buttons in the game's texts](#the-switchs-buttons-in-the-games-texts-030)
@@ -83,9 +88,15 @@ Tested on the desktop build with the original 1.3.128 APK and OBB:
 | Rare crash loading into a race (a timing function reaching a missing object) | guarded in the loader (`src/game/fixes.cpp`) |
 | Rare crash loading into a race (the per-frame value store reaching a missing slot, 0.3.0) | guarded in the loader (`src/game/fixes.cpp`); the guard checked by calling the function with a slot taken away (`NFSMW_TEST_SLOT_NULL=1`) |
 | Threads released when they end (0.3.1) | working on desktop with the Switch's limit simulated (`NFSMW_THREAD_LIMIT`): the old behaviour left the garage on its spinner after a few cars, the new one loaded 40 cars in a row and a race with 10–11 threads running |
-| Phone effects, anti-aliasing, texture filtering (0.3.1) | working on desktop (flags read back, effects and cost measured in an automated race; the anti-aliased and filtered pictures checked); not yet tried on a console |
+| Phone effects, anti-aliasing, anisotropic (texture) filtering (0.3.1) | working on desktop (flags read back, effects and cost measured in an automated race; the anti-aliased and filtered pictures checked); not yet tried on a console |
 | CPU boost while loading (0.3.1) | the detection of loads checked on desktop (which has no clocks to change); not yet tried on a console |
 | Debug menu pages, temperature and battery (0.3.1) | the pages checked on desktop; the temperatures and battery are read only on a console, not yet tried there |
+| Vibration from crashes (0.3.2) | working on desktop: crashes matched to the game's light / medium / hard shake and turned into rumble values (logged with `NFSMW_RUMBLE_LOG`); the HD rumble itself only on a console, not yet tried there |
+| Vibration from nitro (0.3.2) | the player's nitro gauge found and read on desktop; using nitro could not be tried there (the tutorial blocked it), not yet tried on a console |
+| Russian, Japanese, Korean and Chinese text (0.3.2) | working on desktop with Noto CJK in place of the console's fonts (the language list and menus checked in Japanese and Russian); the console's own fonts not yet tried |
+| The game's icon and title on the `.nro` (0.3.2) | working on desktop on a copy of the released `.nro` (icon, title in all 16 languages, RomFS intact); on the console not yet tried |
+| Freeing unused Java objects (0.3.2) | working on desktop, also with a pass after every 150 new objects (`NFSMW_GC_OBJECTS=150`) through the map, events and the language menu |
+| Big blocks at the top of the heap (0.3.2) | working on desktop at 1080p with the console's 1 GiB heap; the docked map on a console after several events not yet confirmed |
 | 720p handheld / 1080p docked | working (1080p rendering checked on desktop) |
 | First-start setup from the APK or `.xapk`, fixing misplaced files | working on desktop; the Switch's setup screen and its restart are not yet confirmed on many consoles |
 | Same start-up on ARM64 with the Switch memory/JIT model (qemu) | working |
@@ -269,6 +280,132 @@ the same code on the desktop). Every game thread's host thread goes on that list
 starts; the game's `pthread_join` waits for the thread's record to be marked done instead of
 joining the host thread. The `perf:` lines end with the number of threads not yet released.
 
+## Big blocks at the top of the heap (0.3.2)
+
+[Issue #1](../../../issues/1): docked, after two or three events the map stopped loading its
+pictures, and entering an event then crashed. The report's `log.txt` could not be read here, so
+this is what the PC test build shows at 1920x1080 with the console's 1 GiB guest heap
+(`NFSMW_GUEST_MIB=1280`):
+
+- The game picks its UI texture packs by screen size. At 640x360 it loads `published.1x`
+  (the map pack is 4.2 MiB, the menu pack 28.6 MiB); docked it loads `published.4x`, and reads
+  each pack whole into its heap: 58.0 MiB for the map, 66.7 MiB for the menu, 21.0 MiB for the
+  race HUD, two or three such blocks alive at once. Loading the map takes the heap from about
+  25 to about 250 MiB in use for a moment.
+- The port's allocator (`src/core/memory.cpp`) used to give every block the smallest gap it fitted
+  in, wherever that was. The big blocks landed between the game's long-lived data, and when they
+  were freed the gaps they left were split by what had been placed around them: with the same
+  47 MiB in use on the map each time, the largest free block went from 953 MiB to 883 MiB after
+  one map → event → map round, with peaks down to 682 MiB while the packs loaded. A full event
+  (results, garage, unlocks) keeps more data around than the quick rounds of the test.
+- Android's own malloc gives blocks this big their own memory mapping, so the game never had this
+  problem on a phone.
+
+Since 0.3.2, blocks of 1 MiB and more are taken from the top of the heap (the highest free region
+that holds them) and everything else from the bottom, so the big ones only ever sit next to each
+other and their space joins up again when they are freed. `NFSMW_HEAP_BEST_FIT=1` restores the
+old placement for comparisons.
+
+`log.txt` shows the rest: each `perf:` line has `game heap X MiB in use, Y of Z MiB taken,
+largest free W MiB`, every block of 16 MiB or more gets a `guest heap: 58.0 MiB block ...` line
+with the largest free block left, and a failed allocation logs the request with what was in use
+and free. If the map still stops loading, those lines say whether the game's heap ran out (and
+how), or whether the cause lies elsewhere (the `memory X of Y MiB` figure covers the console's
+memory as a whole, `GL textures` the game's textures).
+
+## Java objects: freeing what the game no longer uses (0.3.2)
+
+There is no Java VM in the port: the game's JNI calls reach a small table of fake classes
+(`src/hle/jni/`), and up to 0.3.1 nothing in it was ever freed. `DeleteLocalRef` and
+`DeleteGlobalRef` did nothing, so every object the game made stayed, and arrays and bitmaps
+kept their block of the game's own heap. The game draws every piece of text (map labels,
+event cards, menus) into a new `BitmapGraphics` bitmap, so the heap kept a little more after
+every screen. It was the first suspect for [issue #1](../../../issues/1) (the map stops
+loading after a few events, docked), but measured on the PC test build it is slow: about 1 MiB
+of bitmaps in ten minutes at 360p, 4 MiB at 1080p. The cause found for issue #1 is described
+under [Big blocks at the top of the heap](#big-blocks-at-the-top-of-the-heap-032); this leak is
+fixed as well.
+
+Objects now live as JNI defines it (`src/hle/jni/jni.cpp`):
+
+- A **local reference** is recorded for the thread that receives it (a Java method's result,
+  `NewObject`, `NewStringUTF`, `GetObjectField`, `GetObjectArrayElement`, ...). It ends with
+  `DeleteLocalRef`, with `PopLocalFrame`, or when the native method that got it returns (each
+  `jni::call_native` is a frame). Threads the game starts itself keep theirs until
+  `DetachCurrentThread` or the end of the thread.
+- A **global reference** (`NewGlobalRef`, and weak ones, kept strong) counts until
+  `DeleteGlobalRef`.
+- Once per frame, between frames, when more than 4000 objects or 8 MiB of arrays and bitmaps
+  were made since the last time (at most once a second), a **mark-and-sweep pass** frees what
+  nothing reaches any more. Roots: global and local references, static fields, classes, the
+  objects made while the game started up and the ones the port's C++ code holds (`jni::pin`),
+  and everything made since the pass before (C++ code may hold a new object for a moment
+  before handing it over). Fields and object-array elements are followed whenever they look
+  like a reference. A freed object's handle is not reused for 32 passes.
+
+`log.txt` gets a `JNI: freed ...` line when a pass frees more than 1 MiB, and every 30
+passes, with the objects alive and the game heap in use. `NFSMW_NO_JNI_GC=1` turns it off
+(for comparisons).
+
+## Text in every language: the console's fonts (0.3.2)
+
+The game draws its texts through Android (`com.ea.ironmonkey.BitmapGraphics` with `Paint`,
+`src/hle/jni/text.cpp`, rasterized with stb_truetype) in its own fonts, Gotham, which only
+have Latin letters. On a phone, Android draws every character the font lacks with the phone's
+own fonts; here those characters were missing, so the language menu showed nothing for
+Русский, 日本語, 한국어 and 中文 ([issue #2](../../../issues/2)), and the game in one of those
+languages had blank texts. Now each character the game's font does not have is drawn with the
+console's own fonts, the shared fonts every Switch game can use (`plGetSharedFontByType`:
+Standard, Korean, Chinese Simplified and Traditional), so no font is shipped with the port. For a
+text with kana the Japanese font draws the kanji, for one with Hangul the Korean font, and for
+Chinese text the Simplified or Traditional font that has every character. Line heights stay the
+game font's. The desktop build uses Noto CJK and Droid Sans Fallback when installed
+(`NFSMW_FALLBACK_FONTS="file[#index]=tag,..."` chooses others).
+
+## Vibration (0.3.2)
+
+The Android game never vibrates, so the port takes two things the game already does and turns
+them into HD rumble (`src/game/rumble.cpp`; `platform::set_rumble` on the Switch sends one
+`HidVibrationValue` per frame to the controller in use: handheld, Pro Controller, Joy-Con pair
+or a single Joy-Con).
+
+- **Crashes.** The game shakes the race camera on each of the player's crashes. Its collision
+  code (libapp.so +0xC014C) compares the impact with three thresholds and sends the camera the
+  Hard, Medium or Light collision shake from its tuning (active time, two shake speeds, two
+  shake lengths; the tuning names are in the binary: `HardCollisionCameraShakeActiveTime`...).
+  The port hooks the camera's `CameraShakes::Start` (+0x91DF0) and `Stop` (+0x91EB4) with a
+  small entry hook (the jump to a trampoline that tells the port and then runs the game's two
+  instructions it replaced). For a crash shake it finds which of the three tuning entries it
+  is (the tuning object comes from the getter at +0x341FB8) and gives a thump of 0.35, 0.65 or
+  1.0, mostly on the low-frequency motor, fading out over 0.2 to 0.6 seconds.
+- **Nitro.** Starting nitro also sends a camera shake, but that one was not seen arriving on
+  Android, so the port watches the player's nitro gauge instead: the HUD's nitro bar (Update at
+  +0x1E11F0, hooked the same way) keeps the player's nitro component at +0xF4 (with the
+  shared_ptr count block at +0xFC, checked so a finished race's component is never read), and
+  its level is the float at +0xBC. While the level goes down, the player is using nitro: a
+  steady buzz, mostly on the high-frequency motor, that stops 0.25 s after the level stops
+  going down (so a pause stops it too).
+
+The setting (`vibration=off|low|normal|strong`, debug menu CONTROLS & SOUND) scales it all by
+0, 0.5, 0.75 or 1; changing it in the menu gives a short test pulse. The controller is told to
+stop when the game goes to the HOME menu and while the debug menu is open. Every hook checks
+the game's instruction words first and is left out, with a warning in `log.txt`, if they are
+not the expected ones. `NFSMW_RUMBLE_LOG=1` logs each shake, the crash level it matched, the
+nitro gauge and every change sent to the controller.
+
+## The game's icon on the player's copy (0.3.2)
+
+The released `.nro` has the port's own plain icon: no EA artwork is shipped. At start-up the
+port takes the game's launcher icon out of the player's APK in `game/` (the adaptive icon's
+two layers, the visible middle 72/108 of each side, else the plain icon), keeps it as
+`game/icon.jpg` so it survives deleting the APK and updating the port, and writes it into the
+`.nro` that is running, with the title "NFS Most Wanted 2012" in every language of its NACP
+(`src/game/icon.cpp`). The `.nro` is rewritten through a temporary file with its RomFS
+unmounted for that moment. The Homebrew Menu shows the game's icon from then on, and a
+forwarder installed afterwards gets it too ([issue #3](../../../issues/3)); one installed
+before keeps the old icon until it is installed again. `tools/prepare_sd.py --nro` gives the
+same result on a computer. `NFSMW_NO_ICON=1` leaves the `.nro` alone.
+
 ## Crash reports and library checks (0.2.8)
 
 **The crash itself.** The tester's Atmosphère crash report (0.2.7) showed a data abort on the
@@ -411,12 +548,14 @@ word; `src/game/fixes.cpp`). `highest` also adds 15, 25 and 26, which only Highe
 much as High. The option acts at detail level Medium (`highest` also at High) and takes effect
 at the next start.
 
-### Texture filtering and anti-aliasing (0.3.1)
+### Anisotropic filtering and anti-aliasing (0.3.1)
 
 Two graphics options the game itself does not have on Android, in the debug menu's GRAPHICS page
 and in `settings.ini`; both change while the game runs (`src/hle/gles.cpp`):
 
-- **Texture filtering** (`texture_filtering=off|2x|4x|8x|16x`, default 4x). The game never asks
+- **Anisotropic filtering** (`anisotropic_filtering=off|2x|4x|8x|16x`, default 4x; 0.3.1 called
+  it "Texture filtering", `texture_filtering=`, and a `settings.ini` with that line is still
+  read and rewritten with the new name). The game never asks
   for anisotropic filtering, so textures seen at a slant (the road ahead, building walls) blur.
   Every texture the game gives a mipmap minification filter gets
   `GL_TEXTURE_MAX_ANISOTROPY_EXT` at the chosen level (clamped to what the GPU allows; Maxwell
@@ -579,12 +718,13 @@ visible right away. Changes are saved immediately to `settings.ini` in the port'
 | GRAPHICS | Detail level | highest / high / medium / low | **medium** | The game's own detail tier. Applies the next time the game starts. |
 | GRAPHICS | Phone effects | off / high-end phones / top phones | **high-end phones** | High's effects at Medium (see [Phone effects](#phone-effects-031)). Next start. |
 | GRAPHICS | Anti-aliasing | off / 2x / 4x | **off** | Multisampling of what the game draws to the screen. Costs GPU time. |
-| GRAPHICS | Texture filtering | standard / 2x – 16x | **4x** | Anisotropic filtering on every mipmapped texture. |
+| GRAPHICS | Anisotropic filtering | off / 2x – 16x | **4x** | On every mipmapped texture: the road ahead stays sharp. Called "Texture filtering" (`texture_filtering=`) in 0.3.1; that line is still read. |
 | GRAPHICS | 3D resolution | 100 % – 50 % | **100 %** | Draws the race scene at a lower resolution and stretches it back; menus and HUD stay sharp. Only acts at detail level Highest (see below). |
 | GRAPHICS | Frame-rate counter | off / FPS / full | off | Top-left corner. Full adds frame times, GL calls, clocks and resolution. |
 | CONTROLS & SOUND | Tilt steering | off / on | off | The gyro steering under [Gyro steering](#gyro-steering) (also in the game's Options > Controls). |
 | CONTROLS & SOUND | Tilt for full lock | 15 – 60 degrees | **30** | Smaller = more sensitive. |
 | CONTROLS & SOUND | Invert tilt | off / on | off | For a car that steers the wrong way. |
+| CONTROLS & SOUND | Vibration | off / low / normal / strong | **normal** | Rumble for crashes and nitro (see [Vibration](#vibration-032)). A short pulse when changed. |
 | CONTROLS & SOUND | Sound volume | 100 % – 50 % | **70 %** | Volume of the game's mix before it is turned into 16-bit samples (see [Sound](#sound)). Above 70 % loud moments crackle. |
 
 INFORMATION shows live figures: the version and detail level, the screen and 3D resolution with

@@ -500,6 +500,77 @@ LibraryCheck check_library(const std::string& name, u64 size, u32 crc, u32* reco
     return it->second.size == size && it->second.crc == crc ? LibraryCheck::AsExtracted : LibraryCheck::Changed;
 }
 
+namespace {
+// One entry's bytes (stored or deflated), at most 8 MiB.
+bool read_entry(Archive& a, const Entry& e, std::vector<u8>& out) {
+    u64 off = 0;
+    if ((e.flags & 1) || e.usize > (8u << 20) || e.csize > (8u << 20) || !a.data_start(e, off)) return false;
+    std::vector<u8> in(e.csize);
+    if (!a.read_at(off, in.data(), e.csize)) return false;
+    if (e.method == 0) {
+        out = std::move(in);
+        return true;
+    }
+    out.resize(std::max<u64>(e.usize, 1));
+    return e.method == 8 && inflate_raw(in.data(), in.size(), out.data(), e.usize);
+}
+
+// res/drawable-<density>[-vN]/<file> (or mipmap-), highest density first.
+const Entry* best_density(const Archive& a, const std::string& file) {
+    static const char* const kOrder[] = {"xxxhdpi", "xxhdpi", "xhdpi", "hdpi", "mdpi", ""};
+    const Entry* best = nullptr;
+    int best_rank = 99;
+    for (const Entry& e : a.entries) {
+        if (!starts_with(e.name, "res/") || base_name(e.name) != file) continue;
+        const std::string dir = e.name.substr(4, e.name.size() - 4 - file.size() - 1);  // drawable-xxxhdpi-v4
+        if (!starts_with(dir, "drawable") && !starts_with(dir, "mipmap")) continue;
+        int rank = 6;
+        for (int i = 0; i < 6; i++) {
+            const std::string d = kOrder[i];
+            if (d.empty() ? dir.find("dpi") == std::string::npos : dir.find("-" + d) != std::string::npos) {
+                rank = i;
+                break;
+            }
+        }
+        if (rank < best_rank) best = &e, best_rank = rank;
+    }
+    return best;
+}
+}  // namespace
+
+bool game_icon_files(std::vector<u8>& background, std::vector<u8>& foreground, std::vector<u8>& plain) {
+    background.clear(), foreground.clear(), plain.clear();
+    for (const std::string& p : find_packages()) {
+        std::vector<std::unique_ptr<Archive>> todo;
+        auto a = std::make_unique<Archive>();
+        a->label = base_name(p);
+        if (!a->open(p)) continue;
+        // A bundle: the APKs stored in it (the base APK has the icon).
+        for (const Entry& e : a->entries) {
+            u64 off = 0;
+            if (!ends_with(lower(e.name), ".apk") || e.method != 0 || !a->data_start(e, off)) continue;
+            auto inner = std::make_unique<Archive>();
+            inner->label = a->label + " > " + base_name(e.name);
+            if (inner->open(a->path, off, e.csize)) todo.push_back(std::move(inner));
+        }
+        todo.insert(todo.begin(), std::move(a));
+        for (auto& ar : todo) {
+            const Entry* bg = best_density(*ar, "ic_background.png");
+            const Entry* fg = best_density(*ar, "ic_foreground.png");
+            const Entry* pl = best_density(*ar, "icon.png");
+            if (!pl) pl = best_density(*ar, "ic_launcher.png");
+            bool got = false;
+            if (bg && fg && read_entry(*ar, *bg, background) && read_entry(*ar, *fg, foreground)) got = true;
+            if (pl && read_entry(*ar, *pl, plain)) got = true;
+            if (got) {
+                LOGI("icon: the game's icon found in %s", ar->label.c_str());
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool run() {
     if (all_there()) return false;
     LOGI("setup: game files missing (libraries: %zu, assets: %s, OBB: %s): looking for them",

@@ -46,6 +46,8 @@ u32 blocked_network_attempts();
 
 // GL statistics/debugging (gles.cpp).
 u64 gl_call_count();
+// Textures the game has now and the size of their images as uploaded (2D).
+void texture_stats(u64& count, u64& bytes);
 u64 gl_filtered_count();  // redundant GL calls dropped by the state filter
 // Apply state the filter holds back (vertex arrays), e.g. before the overlay.
 void gl_flush_state();

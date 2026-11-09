@@ -105,11 +105,24 @@ versión de 64 bits, un archivo dañado o falta de espacio libre.
 
 Mantén presionado **R** mientras abres **cualquier juego** desde el menú HOME. El Homebrew Menu se
 abre con toda la memoria de un juego (modo *title takeover*). Elige **NFS Most Wanted 2012 Loader**
-(de SantiBros).
+(de SantiBros). Desde la 0.3.2, después de abrirse por primera vez muestra el ícono del juego y se
+llama **NFS Most Wanted 2012**.
 
 > [!WARNING]
 > No lo abras desde el Homebrew Menu del **Álbum**: ahí el homebrew solo recibe unos 440 MB de
 > memoria, y no le alcanza al juego. Si lo intentas, el port muestra un aviso.
+
+### Un forwarder en el menú HOME
+
+Un forwarder es un ícono en el menú HOME que abre el `.nro` directamente; se crea a partir del
+archivo `.nro` con una herramienta para forwarders. Créalo **después de abrir el port una vez**: la
+primera vez, el port pone en el `.nro` el ícono del juego (sacado de tu APK; nunca viene con el
+port) y el título "NFS Most Wanted 2012", y el forwarder copia los dos de ahí. Un forwarder creado
+antes muestra el ícono simple del port hasta que lo vuelvas a crear.
+
+Cada versión tiene su propio nombre de archivo (`NFSMostWanted2012-<versión>.nro`) y borra el `.nro`
+anterior la primera vez que se abre, así que **vuelve a crear el forwarder después de cada
+actualización**, una vez abierta la nueva versión.
 
 El juego funciona a **1280×720** en modo portátil y a **1920×1080** en el dock. Desde la 0.3.0
 puedes poner o sacar la consola del dock mientras juegas: el port cambia a la nueva resolución al
@@ -128,7 +141,8 @@ sd:/switch/NFSMostWanted2012/
 │   ├── <tu APK>.apk                  se puede borrar después de la primera vez
 │   ├── lib/                          libapp.so, libc++_shared.so, libfmodex.so,
 │   │                                 libfmodevent.so, libNimble.so
-│   └── assets/                       los assets del APK
+│   ├── assets/                       los assets del APK
+│   └── icon.jpg                      el ícono del juego sacado de tu APK (va en el .nro)
 ├── save/
 │   ├── progress/                     tu carrera: nfstr_save.sb
 │   └── settings/                     los ajustes del propio juego: idioma, versión, acuerdo
@@ -149,6 +163,8 @@ desde la que se abrió. Puedes borrar `source/` si necesitas espacio.
    abre (nunca uno más nuevo). También puedes borrar tú el `.nro` viejo: con dos `.nro` en la
    carpeta, el Homebrew Menu muestra los dos.
 3. Reemplaza también `source/` por la nueva, si la conservas.
+4. Si usas un forwarder, vuelve a crearlo después de abrir la nueva versión por primera vez (ver
+   [Un forwarder en el menú HOME](#un-forwarder-en-el-menú-home)).
 
 **Si vienes de 0.1.0 a 0.2.0** (carpeta `switch/NFSMostWanted/`) o de una versión de prueba
 (`switch/nfsmw/`): solo copia la nueva carpeta `switch` y abre **NFS Most Wanted 2012 Loader**. La

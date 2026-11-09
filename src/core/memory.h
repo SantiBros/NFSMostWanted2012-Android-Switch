@@ -72,5 +72,13 @@ void heap_free(u32 p);
 u32 heap_usable_size(u32 p);
 u32 heap_strdup(const char* s);
 u64 heap_bytes_in_use();
+// Where the guest heap stands: what the game has allocated (in_use), what the
+// allocator has handed out of the heap area for it (taken: in_use plus the
+// unused parts of small-block chunks and alignment), the area's size, and the
+// largest free block left (a big allocation fails when that is too small).
+struct HeapStats {
+    u64 in_use = 0, taken = 0, size = 0, largest_free = 0;
+};
+HeapStats heap_stats();
 
 }  // namespace mem

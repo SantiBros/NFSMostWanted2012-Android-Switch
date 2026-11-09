@@ -9,6 +9,7 @@
 #include <switch.h>
 
 #include <algorithm>
+#include <cmath>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
@@ -539,6 +540,7 @@ void applet_hook(AppletHookType type, void*) {
     switch (type) {
     case AppletHookType_OnFocusState: {
         bool bg = appletGetFocusState() != AppletFocusState_InFocus;
+        if (bg) set_rumble(0, 0);  // HOME menu: the controller must not keep shaking
         if (bg != g_background) {
             g_background = bg;
             LOGI("clocks: game %s, %s clocks", bg ? "in the background" : "back in front", bg ? "stock" : "chosen");
@@ -694,6 +696,95 @@ void clocks_exit() {
     }
 }
 
+
+// ---- fallback fonts: the console's shared fonts ----------------------------------
+const std::vector<FontBlob>& fallback_fonts() {
+    static const std::vector<FontBlob> list = [] {
+        std::vector<FontBlob> out;
+        // pl:u stays open: the fonts live in its shared memory.
+        if (R_FAILED(plInitialize(PlServiceType_User))) {
+            LOGW("fonts: the system's shared fonts are not available");
+            return out;
+        }
+        const struct {
+            PlSharedFontType type;
+            const char* tag;
+            const char* name;
+        } fonts[] = {
+            {PlSharedFontType_Standard, "ja", "Standard"},
+            {PlSharedFontType_KO, "ko", "Korean"},
+            {PlSharedFontType_ChineseTraditional, "zh-hant", "Chinese Traditional"},
+            {PlSharedFontType_ChineseSimplified, "zh-hans", "Chinese Simplified"},
+            {PlSharedFontType_ExtChineseSimplified, "zh-hans", "Chinese Simplified (extended)"},
+        };
+        for (const auto& f : fonts) {
+            PlFontData fd{};
+            if (R_FAILED(plGetSharedFontByType(&fd, f.type)) || !fd.address || !fd.size) continue;
+            FontBlob b;
+            b.data = static_cast<const unsigned char*>(fd.address);
+            b.size = fd.size;
+            b.tag = f.tag;
+            b.name = f.name;
+            out.push_back(b);
+        }
+        return out;
+    }();
+    return list;
+}
+
+// ---- vibration (HD rumble) ----------------------------------------------------------
+namespace {
+std::mutex g_rumble_mutex;
+bool g_rumble_init = false;
+// handheld (2), Pro Controller (2), Joy-Con pair (2), single Joy-Con left / right (1 each)
+HidVibrationDeviceHandle g_vib_handheld[2], g_vib_fullkey[2], g_vib_dual[2], g_vib_left[1], g_vib_right[1];
+bool g_vib_ok[5] = {false, false, false, false, false};
+const HidVibrationDeviceHandle* g_vib_last = nullptr;
+int g_vib_last_n = 0;
+float g_last_low = 0, g_last_high = 0;
+}  // namespace
+
+void set_rumble(float low, float high) {
+    std::lock_guard lk(g_rumble_mutex);
+    if (!g_rumble_init) {
+        g_rumble_init = true;
+        g_vib_ok[0] = R_SUCCEEDED(hidInitializeVibrationDevices(g_vib_handheld, 2, HidNpadIdType_Handheld, HidNpadStyleTag_NpadHandheld));
+        g_vib_ok[1] = R_SUCCEEDED(hidInitializeVibrationDevices(g_vib_fullkey, 2, HidNpadIdType_No1, HidNpadStyleTag_NpadFullKey));
+        g_vib_ok[2] = R_SUCCEEDED(hidInitializeVibrationDevices(g_vib_dual, 2, HidNpadIdType_No1, HidNpadStyleTag_NpadJoyDual));
+        g_vib_ok[3] = R_SUCCEEDED(hidInitializeVibrationDevices(g_vib_left, 1, HidNpadIdType_No1, HidNpadStyleTag_NpadJoyLeft));
+        g_vib_ok[4] = R_SUCCEEDED(hidInitializeVibrationDevices(g_vib_right, 1, HidNpadIdType_No1, HidNpadStyleTag_NpadJoyRight));
+        LOGI("vibration: handheld %s, Pro Controller %s, Joy-Con pair %s", g_vib_ok[0] ? "ok" : "no",
+             g_vib_ok[1] ? "ok" : "no", g_vib_ok[2] ? "ok" : "no");
+    }
+    low = std::clamp(low, 0.f, 1.f);
+    high = std::clamp(high, 0.f, 1.f);
+    // The controller in use now.
+    const HidVibrationDeviceHandle* h = nullptr;
+    int n = 0;
+    const u32 styles = padGetStyleSet(&g_pad);
+    if ((styles & HidNpadStyleTag_NpadHandheld) && g_vib_ok[0]) h = g_vib_handheld, n = 2;
+    else if ((styles & HidNpadStyleTag_NpadFullKey) && g_vib_ok[1]) h = g_vib_fullkey, n = 2;
+    else if ((styles & HidNpadStyleTag_NpadJoyDual) && g_vib_ok[2]) h = g_vib_dual, n = 2;
+    else if ((styles & HidNpadStyleTag_NpadJoyLeft) && g_vib_ok[3]) h = g_vib_left, n = 1;
+    else if ((styles & HidNpadStyleTag_NpadJoyRight) && g_vib_ok[4]) h = g_vib_right, n = 1;
+    HidVibrationValue v[2];
+    if (g_vib_last && g_vib_last != h) {  // another controller now: stop the old one
+        for (auto& x : v) x = HidVibrationValue{0, 160.f, 0, 320.f};
+        hidSendVibrationValues(g_vib_last, v, g_vib_last_n);
+        g_last_low = g_last_high = 0;
+    }
+    g_vib_last = h;
+    g_vib_last_n = n;
+    if (!h) return;
+    if (std::fabs(low - g_last_low) < 0.01f && std::fabs(high - g_last_high) < 0.01f &&
+        (low == 0) == (g_last_low == 0) && (high == 0) == (g_last_high == 0))
+        return;
+    g_last_low = low;
+    g_last_high = high;
+    // Kept below the motors' maximum, which rattles.
+    for (int i = 0; i < n; i++) v[i] = HidVibrationValue{low * 0.85f, 110.f, high * 0.7f, 290.f};
+    hidSendVibrationValues(h, v, n);
+}
 }  // namespace platform
 
 // ---- process start-up -------------------------------------------------------------

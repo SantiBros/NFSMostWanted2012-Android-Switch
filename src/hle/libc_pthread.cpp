@@ -14,6 +14,7 @@
 #include "game/perf.h"
 #include "dynarmic/interface/compile_stats.h"
 #include "hle/hle.h"
+#include "hle/jni/jni.h"
 #include "platform/thread.h"
 
 namespace hle {
@@ -398,6 +399,7 @@ int h_create(u32 out, u32 attr, u32 start, u32 arg) {
         } catch (const cpu::ThreadExit&) {
         }
         const std::string host = load ? cpu::host_calls_summary() : std::string();
+        jni::thread_ended(id);  // its JNI local references go away
         cpu::detach_current_thread();
         // What a thread's life cost (the game starts a new thread for each
         // loading screen, so these lines time the loads).

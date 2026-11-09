@@ -29,7 +29,9 @@
 #include "game/native.h"
 #include "game/obb_patch.h"
 #include "game/perf.h"
+#include "game/icon.h"
 #include "game/prefs.h"
+#include "game/rumble.h"
 #include "game/ui_nav.h"
 #include "hle/gl_queue.h"
 #include "hle/hle.h"
@@ -108,6 +110,7 @@ int main(int argc, char** argv) {
     bool after_setup = false;
     for (int i = 1; i < argc; i++) after_setup = after_setup || std::strcmp(argv[i], "--after-setup") == 0;
     if (game::setup::run() && platform::finish_setup_screen(game::paths::self_nro(), !after_setup)) return 0;
+    game::icon::update();  // the game's icon (from the player's APK) on their copy of the .nro (0.3.2)
 
     game::prefs::load();  // settings.ini: gyro steering, performance options
     mem::init();
@@ -227,6 +230,7 @@ int main(int argc, char** argv) {
     game::fixes::apply();
     game::audio::install();  // sound volume
     game::native::apply();  // native versions of the game's hottest OBB-reading code
+    game::rumble::install();  // vibration from the game's camera shakes (0.3.2)
     game::ui::init();  // controller navigation for the touch menus
     // JIT cache: after every patch to the game's code, before any of it runs.
     if (game::prefs::at_startup().jit_cache && !std::getenv("NFSMW_NO_JIT_CACHE")) {
@@ -313,6 +317,14 @@ int main(int argc, char** argv) {
         game::perf::frame_begin();
         game::fixes::frame();
         game::audio::frame();
+        {
+            // Vibration: fade the game's camera shakes into the controller.
+            static auto last = std::chrono::steady_clock::now();
+            const auto now = std::chrono::steady_clock::now();
+            game::rumble::hold(game::debug_menu::is_open());
+            game::rumble::frame(std::chrono::duration<float>(now - last).count());
+            last = now;
+        }
         if (frame == 60) jit_cache::spare_may_go();  // the game's service threads are running by now
         if (frame == 90) crash::test_point("frame");
         if (!S.size_forced && frame % 30 == 0) {
@@ -375,6 +387,7 @@ int main(int argc, char** argv) {
             platform::sample_gate(false, nullptr);
             hle::gl_flush_state();  // vertex arrays the state filter held back, before the overlay
             hle::gl_end_game_frame();  // anti-aliasing: the game's picture to the screen
+            jni::collect_garbage();    // Java objects the game no longer uses (0.3.2)
             double tick_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tk0).count();
             double gl_ms = (hle::gl_time_ns() - gl0) / 1e6;
             u64 calls = hle::gl_call_count() - calls0;

@@ -50,6 +50,7 @@ void run() {
     platform::boost_current_thread();
     cpu::attach_current_thread(512 * 1024);
     jni::jref dev = jni::new_object("org/fmod/FMODAudioDevice");
+    jni::pin(dev);
     jni::jref buf = 0;
     u32 bytes = 0;
     int rate = 0;
@@ -65,6 +66,7 @@ void run() {
             int num = info(dev, 2);  // number of DSP buffers
             bytes = (u32)len * 2 * 2;
             buf = jni::new_object("java/nio/ByteBuffer");
+            jni::pin(buf);
             jni::get(buf)->data = mem::heap_calloc(bytes, 1);
             jni::get(buf)->length = bytes;
             open = platform::audio_open(rate, 2, len * num);

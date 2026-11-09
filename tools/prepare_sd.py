@@ -152,8 +152,12 @@ def game_icon_jpeg(z):
     return out.getvalue()
 
 
+NRO_TITLE = "NFS Most Wanted 2012"  # the title next to the game's icon (as the port sets it on the console)
+
+
 def set_nro_icon(nro_bytes, jpeg):
-    """Replace the icon in an NRO's asset section (ASET: icon, NACP, RomFS)."""
+    """Replace the icon in an NRO's asset section (ASET: icon, NACP, RomFS), and the title in
+    every language of its NACP."""
     if nro_bytes[0x10:0x14] != b"NRO0":
         raise ValueError("not an NRO file")
     size = struct.unpack_from("<I", nro_bytes, 0x18)[0]
@@ -163,6 +167,11 @@ def set_nro_icon(nro_bytes, jpeg):
     ver = struct.unpack_from("<I", aset, 4)[0]
     sections = [struct.unpack_from("<QQ", aset, 8 + 16 * i) for i in range(3)]  # icon, nacp, romfs
     blobs = [jpeg] + [aset[o:o + n] for o, n in sections[1:]]
+    nacp = bytearray(blobs[1])
+    if len(nacp) >= 0x3000:
+        for lang in range(16):
+            nacp[lang * 0x300:lang * 0x300 + 0x200] = NRO_TITLE.encode().ljust(0x200, b"\0")
+        blobs[1] = bytes(nacp)
     head = 8 + 16 * 3
     body, entries, pos = b"", [], head
     for blob in blobs:
@@ -179,7 +188,7 @@ def install_nro(src, dest, z):
     if jpeg:
         try:
             data = set_nro_icon(data, jpeg)
-            print(f"{os.path.basename(dest)}: icon replaced with the game's icon from your APK")
+            print(f"{os.path.basename(dest)}: icon replaced with the game's icon from your APK, title \"{NRO_TITLE}\"")
         except ValueError as e:
             print(f"note: could not change the icon ({e}); the .nro keeps its own icon")
     os.makedirs(os.path.dirname(dest), exist_ok=True)

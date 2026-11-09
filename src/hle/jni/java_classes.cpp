@@ -340,7 +340,7 @@ void register_java_classes() {
     // The SDK is told there is no network; analytics/tracking components do not
     // exist; network-change receivers are never registered.
     def("com/ea/nimble/Network", "getComponent", "()Lcom/ea/nimble/INetwork;", [](Call&) {
-        static jref net = new_object("com/ea/nimble/INetwork");
+        static jref net = [] { jref n = new_object("com/ea/nimble/INetwork"); pin(n); return n; }();
         return V::L(net);
     });
     def("com/ea/nimble/INetwork", "getStatus", "()Lcom/ea/nimble/Network$Status;", [](Call&) {

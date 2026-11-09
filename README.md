@@ -44,19 +44,21 @@ breaks, open an [issue](../../issues) with your `log.txt`: that's where the next
 > Wii U or iOS versions of Most Wanted (2012) don't work.
 
 > [!TIP]
-> **New in 0.3.1**
-> - **Effects of high-end phones**: haze in the distance, wet and shiny roads, reflections on the cars,
->   smoke, the engine's echo in tunnels, now at the recommended detail level too, at almost no cost
->   ([see it](#screenshots)).
-> - **Anti-aliasing** (smoother edges, optional) and **texture filtering** (the road ahead stays sharp).
-> - **Faster loading**: the CPU runs at 1785 MHz while the game loads, as official Switch games do;
->   the game's most frequent small calls got faster; and updates now keep the JIT cache.
-> - **A bigger debug menu** (ZL + ZR + Minus) in four pages: performance, graphics, controls & sound,
->   and live information (temperatures, battery, loading times).
-> - **Fixed: after a long session, cars stopped appearing in the garage and the next race stayed black.**
+> **New in 0.3.2**
+> - **Vibration**: every crash gives a thump (light, medium or hard, as the game itself rates it) and
+>   nitro a steady buzz. Off, low, normal or strong in the debug menu.
+> - **All 11 languages**: Russian, Japanese, Korean and Chinese were blank; the letters the game's
+>   font lacks now come from the Switch's own fonts ([#2](../../issues/2)).
+> - **Your game's icon**: after the first start, the Homebrew Menu shows the game's icon (from your
+>   own APK) and the title "NFS Most Wanted 2012", and so does a forwarder made after that
+>   ([#3](../../issues/3)).
+> - **Docked map fix**: docked, the map could stop loading after a few events, then entering an event
+>   crashed. The big texture packs the game loads when docked are now kept apart in memory
+>   ([#1](../../issues/1)).
+> - Texture filtering is now called **anisotropic filtering** (your setting is kept).
 >
-> 0.3.0 brought docking and undocking while you play and the Switch's buttons in the game. All the
-> details are in the [changelog](CHANGELOG.md).
+> 0.3.1 brought the effects of high-end phones, anti-aliasing, faster loading and the fix for long
+> sessions. All the details are in the [changelog](CHANGELOG.md).
 
 ## Screenshots
 
@@ -104,7 +106,7 @@ Switch's handheld resolution. It shows how the game looks, not the console's fra
     <td><img src="docs/images/screenshots/debug-menu-info.jpg" alt="The port's debug menu, INFORMATION page"></td>
   </tr>
   <tr>
-    <td align="center"><sub>The debug menu (ZL + ZR + Minus), GRAPHICS page: phone effects, anti-aliasing, texture filtering</sub></td>
+    <td align="center"><sub>The debug menu (ZL + ZR + Minus), GRAPHICS page: phone effects, anti-aliasing, anisotropic filtering</sub></td>
     <td align="center"><sub>Its INFORMATION page: frame rate, clocks, temperatures, battery, loading times (some only on the console)</sub></td>
   </tr>
 </table>
@@ -124,7 +126,7 @@ tutorial for controller steering. More pictures: the [controls pages](#controls)
 - **The effects of high-end phones, at the cost of a mid-range one.** The game gives fast phones
   haze in the distance, wet and shiny roads, reflections on the cars, smoke and the engine's echo in
   tunnels; the port turns them on at its recommended detail level, without the extra objects that
-  make the game's High level slow. Plus optional **anti-aliasing** and **texture filtering**, which no
+  make the game's High level slow. Plus optional **anti-aliasing** and **anisotropic filtering**, which no
   phone had in this game.
 - **Switch buttons in the game.** The controls pages and tutorials name the Switch's buttons instead
   of the MOGA gamepad the game was made for, in all 11 languages. The controls pages show the
@@ -133,6 +135,12 @@ tutorial for controller steering. More pictures: the [controls pages](#controls)
 - **Full controller support.** Drive with the sticks and buttons, and play every menu with a
   highlight you move with the D-pad, drawn in the game's own style. The touch screen still works.
 - **Optional gyro steering.** Tilt the console or the controller like a steering wheel.
+- **Vibration.** A thump for every crash, stronger for a hard one, and a buzz while you use nitro.
+- **Every language readable.** Russian, Japanese, Korean and Chinese use the Switch's own fonts
+  for the letters the game's font lacks.
+- **Your game's icon on your copy.** At the first start the port takes the icon from your APK and
+  puts it, with the title "NFS Most Wanted 2012", on the `.nro` (and on a forwarder made after that).
+  The released `.nro` has the port's own icon: no EA artwork is shipped.
 - **Easy install, no PC needed.** Copy your APK and OBB (or a single `.xapk`) into one folder: the
   port sets itself up at the first start, with a progress screen.
 - **Forgiving.** Libraries left in `lib/armeabi-v7a/`, an assets folder in the wrong place or a
@@ -145,8 +153,8 @@ tutorial for controller steering. More pictures: the [controls pages](#controls)
 - **Your career in one file** (`save/progress/nfstr_save.sb`): easy to back up, kept across updates.
 - **Debug menu** (ZL + ZR + Minus), four pages switched with L / R: performance (frame-rate limit,
   VSync, CPU / GPU / memory clocks, the loading boost), graphics (detail level, phone effects,
-  anti-aliasing, texture filtering, 3D resolution, a frame-rate counter), controls & sound (tilt
-  steering, volume) and live information (clocks, temperatures, battery, loading times).
+  anti-aliasing, anisotropic filtering, 3D resolution, a frame-rate counter), controls & sound (tilt
+  steering, vibration, volume) and live information (clocks, temperatures, battery, loading times).
 - **Three crashes of the original game fixed** in the loader.
 
 ## What you need
@@ -168,7 +176,7 @@ tutorial for controller steering. More pictures: the [controls pages](#controls)
 <img src="docs/images/install-steps.png" alt="Install in 4 steps: download the zip, copy the switch folder to the SD card, add your APK and OBB to the game folder, start with R + any game" width="100%">
 
 1. **Download.** On the [Releases](../../releases) page, under **Assets**, download
-   `NFSMostWanted2012-0.3.1.zip` (not "Source code", which is only for developers) and unzip it on
+   `NFSMostWanted2012-0.3.2.zip` (not "Source code", which is only for developers) and unzip it on
    your computer.
 2. **Copy to the SD card.** Copy the `switch` folder from the zip to the root of your SD card.
 3. **Add your game.** Copy your APK and your OBB into `switch/NFSMostWanted2012/game/`. Don't unzip or
@@ -187,7 +195,7 @@ tutorial for controller steering. More pictures: the [controls pages](#controls)
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.3.1.nro   the port
+├── NFSMostWanted2012-0.3.2.nro   the port
 ├── README.txt                    the player's guide
 ├── LICENSES.txt                  open-source components and their licenses
 ├── game/                         YOUR game files (never share them)
@@ -287,7 +295,10 @@ in `settings.ini`.
 | Docking and undocking while you play | 🧪 New in 0.3.0: the resolution follows at once. Feedback welcome |
 | Frame rate | ⚠️ Still being tuned on real hardware: the game targets 30 fps, and busy races can drop below that at stock clocks. The debug menu can raise the CPU clock. 0.2.6 and 0.2.7 remove the main causes of short stutters found so far. |
 | Loading | ✅ Faster since 0.2.7, most of all from the second start on (the JIT cache). 🧪 0.3.1 adds the CPU boost while loading: not yet measured on a console |
-| Phone effects, anti-aliasing, texture filtering | 🧪 New in 0.3.1: working on the PC test build, not yet tried on a console |
+| Phone effects, anti-aliasing, anisotropic filtering | 🧪 New in 0.3.1: working on the PC test build, not yet tried on a console |
+| Vibration | 🧪 New in 0.3.2: crashes checked on the PC test build; how it feels on each controller still to be confirmed |
+| All 11 languages (Russian, Japanese, Korean, Chinese included) | ✅ Readable since 0.3.2 (PC test build); 🧪 the console's fonts still to be confirmed |
+| Docked play over many events | 🧪 0.3.2 fixes the map that stopped loading after a few events ([#1](../../issues/1)): to be confirmed on a console |
 | Gyro steering, custom clocks | 🧪 New, not yet confirmed on many consoles: feedback welcome |
 | Online features (Autolog, leaderboards, EA account, store) | ❌ Not available: the port is offline by design |
 
@@ -307,6 +318,9 @@ more consoles help the most, in English or Spanish, with `log.txt` from the port
 | 🔌 **Docking while playing** (new in 0.3.0) | On a Switch or Switch OLED, put the console in the dock and take it out during a race and in the menus. Does the picture stay right? |
 | ⏱️ **Loading times** (new in 0.3.1) | The CPU now runs at 1785 MHz while the game loads. `log.txt` has a `loading screen: ... s` line for each loading screen: how long are yours? |
 | ✨ **Anti-aliasing and phone effects** (new in 0.3.1) | Turn on anti-aliasing (debug menu → GRAPHICS) and race a little, handheld and docked if you can: does the frame rate stay at 30? |
+| 📳 **Vibration** (new in 0.3.2) | Crash into a wall, then use nitro: does the controller rumble, and does it feel right (handheld, Joy-Con, Pro Controller)? |
+| 🗺️ **Docked, several events** (new in 0.3.2) | Docked, play three or four events in a row and go back to the map between them: does the map still load? `log.txt` now shows the game's memory. |
+| 🖼️ **Icon on a forwarder** (new in 0.3.2) | After the first start of 0.3.2, make a forwarder: does it show the game's icon and the title "NFS Most Wanted 2012"? |
 | 🏎️ **Frame rate** | Turn on the frame-rate counter in the debug menu (ZL + ZR + Minus) and play a few races. The `perf:` lines in `log.txt` say what holds the frame rate back. |
 | 🪟 **Reflections** | If the building windows look wrong on your console, a photo helps. |
 | 🌍 **Languages** | If a text still says MOGA, or + / − look wrong in your language, a screenshot helps. |
@@ -399,9 +413,11 @@ mode, a controller when docked.
 <details>
 <summary><b>Can the Homebrew Menu show the game's real icon?</b></summary>
 
-Yes, on your own copy: run the optional `prepare_sd.py` script from the release on a PC with
-`--nro` (see the [install guide](docs/INSTALL.md#optional-the-pc-script)). The released `.nro`
-never contains EA's artwork.
+Yes, on your own copy, automatically since 0.3.2: at the first start the port takes the icon out of
+your APK and puts it, with the title "NFS Most Wanted 2012", on the `.nro`. If you use a forwarder,
+make it after that first start, and again after each update (each version has its own `.nro`). The
+released `.nro` never contains EA's artwork. The optional `prepare_sd.py` script does the same on a
+PC with `--nro` (see the [install guide](docs/INSTALL.md#optional-the-pc-script)).
 </details>
 
 <details>
@@ -468,7 +484,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-The result is `build-switch/NFSMostWanted2012-0.3.1.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
+The result is `build-switch/NFSMostWanted2012-0.3.2.nro`. [docs/BUILDING.md](docs/BUILDING.md) has
 the details, the Linux test build used for development, and how a release is made.
 
 ## Support
@@ -488,7 +504,7 @@ Standing on the shoulders of others:
   [**devkitPro**](https://devkitpro.org) (devkitA64, switch-tools, switch-mesa) and
   [**Atmosphère**](https://github.com/Atmosphere-NX/Atmosphere).
 - [**Mesa**](https://mesa3d.org) and **libdrm_nouveau** for OpenGL ES on the Switch's GPU.
-- [**stb**](https://github.com/nothings/stb) by Sean Barrett (font rendering, unpacking the APK).
+- [**stb**](https://github.com/nothings/stb) by Sean Barrett (font rendering, unpacking the APK, the icon from your APK).
 - **Barlow Condensed** by Jeremy Tribby (SIL Open Font License), used in the banner and the icon.
 
 Full list with licenses: [THIRD_PARTY.md](THIRD_PARTY.md).

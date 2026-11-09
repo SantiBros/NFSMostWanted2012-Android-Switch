@@ -45,22 +45,22 @@ algo falla, abre un [issue](../../issues) con tu `log.txt`: así empieza la sigu
 > PlayStation 3, Xbox 360, PS Vita, Wii U o iOS de Most Wanted (2012) no sirven.
 
 > [!TIP]
-> **Novedades de la 0.3.1**
-> - **Los efectos de los celulares de gama alta**: neblina a lo lejos, calles mojadas y brillantes,
->   reflejos en los autos, humo y el eco del motor en los túneles, ahora también en el nivel de detalle
->   recomendado, casi sin costo ([verlo](#capturas)).
-> - **Antialiasing** (bordes más suaves, opcional) y **filtrado de texturas** (la calle se ve nítida a lo
->   lejos).
-> - **Cargas más rápidas**: la CPU funciona a 1785 MHz mientras el juego carga, como hacen los juegos
->   oficiales de Switch; las llamadas pequeñas más frecuentes del juego son más rápidas; y las
->   actualizaciones ahora conservan la caché JIT.
-> - **Un menú de depuración más grande** (ZL + ZR + Menos) en cuatro páginas: rendimiento, gráficos,
->   controles y sonido, e información en vivo (temperaturas, batería, tiempos de carga).
-> - **Corregido: después de una sesión larga, los autos dejaban de aparecer en el garaje y la
->   siguiente carrera se quedaba en negro.**
+> **Novedades de la 0.3.2**
+> - **Vibración**: cada choque da un golpe (leve, medio o fuerte, según lo califica el propio juego) y
+>   el nitro una vibración continua. Apagada, baja, normal o fuerte en el menú de depuración.
+> - **Los 11 idiomas**: el ruso, el japonés, el coreano y el chino salían en blanco; las letras que la
+>   fuente del juego no tiene ahora salen de las fuentes de la propia Switch ([#2](../../issues/2)).
+> - **El ícono de tu juego**: después de abrirlo por primera vez, el Homebrew Menu muestra el ícono del
+>   juego (sacado de tu propio APK) y el título "NFS Most Wanted 2012", y también un forwarder creado
+>   después ([#3](../../issues/3)).
+> - **Mapa en el dock**: en el dock, el mapa podía dejar de cargar después de unos eventos y al entrar a
+>   un evento el juego se cerraba. Los paquetes de texturas grandes que el juego carga en el dock ahora
+>   van aparte en memoria ([#1](../../issues/1)).
+> - El filtrado de texturas ahora se llama **filtrado anisotrópico** (tu ajuste se conserva).
 >
-> La 0.3.0 trajo poner y sacar la consola del dock mientras juegas y los botones de la Switch en el
-> juego. Todos los detalles están en el [registro de cambios](CHANGELOG.md) (en inglés).
+> La 0.3.1 trajo los efectos de los celulares de gama alta, antialiasing, cargas más rápidas y la
+> corrección de las sesiones largas. Todos los detalles están en el [registro de cambios](CHANGELOG.md)
+> (en inglés).
 
 ## Capturas
 
@@ -109,7 +109,7 @@ consola.</sub></p>
     <td><img src="docs/images/screenshots/debug-menu-info.jpg" alt="El menú de depuración del port, página INFORMATION"></td>
   </tr>
   <tr>
-    <td align="center"><sub>El menú de depuración (ZL + ZR + Menos), página GRAPHICS: efectos de celulares, antialiasing, filtrado de texturas</sub></td>
+    <td align="center"><sub>El menú de depuración (ZL + ZR + Menos), página GRAPHICS: efectos de celulares, antialiasing, filtrado anisotrópico</sub></td>
     <td align="center"><sub>Su página INFORMATION: FPS, relojes, temperaturas, batería, tiempos de carga (algunos solo en la consola)</sub></td>
   </tr>
 </table>
@@ -132,7 +132,7 @@ capturas de carrera es el tutorial del propio juego para manejar con control. M�
 - **Los efectos de un celular de gama alta, al costo de uno de gama media.** El juego les da a los
   celulares rápidos neblina a lo lejos, calles mojadas y brillantes, reflejos en los autos, humo y el
   eco del motor en los túneles; el port los activa en su nivel de detalle recomendado, sin los objetos
-  de más que hacen lento al nivel Alto del juego. Además, **antialiasing** y **filtrado de texturas**
+  de más que hacen lento al nivel Alto del juego. Además, **antialiasing** y **filtrado anisotrópico**
   opcionales, que ningún celular tuvo en este juego.
 - **Los botones de la Switch en el juego.** Las páginas de controles y los tutoriales nombran los
   botones de la Switch en vez del control MOGA para el que se hizo el juego, en los 11 idiomas. Las
@@ -142,6 +142,13 @@ capturas de carrera es el tutorial del propio juego para manejar con control. M�
   un resaltado que mueves con la cruceta, dibujado al estilo del juego. La pantalla táctil sigue
   funcionando.
 - **Dirección con giroscopio (opcional).** Inclina la consola o el control como un volante.
+- **Vibración.** Un golpe en cada choque, más fuerte si es fuerte, y una vibración mientras usas el
+  nitro.
+- **Todos los idiomas se leen.** El ruso, el japonés, el coreano y el chino usan las fuentes de la
+  propia Switch para las letras que la fuente del juego no tiene.
+- **El ícono de tu juego en tu copia.** La primera vez, el port saca el ícono de tu APK y lo pone,
+  con el título "NFS Most Wanted 2012", en el `.nro` (y en un forwarder creado después). El `.nro`
+  publicado tiene el ícono propio del port: no trae imágenes de EA.
 - **Instalación fácil, sin PC.** Copia tu APK y tu OBB (o un solo `.xapk`) en una carpeta: el port
   se prepara solo la primera vez que lo abres, con una pantalla de progreso.
 - **A prueba de errores.** Si las librerías quedaron dentro de `lib/armeabi-v7a/`, la carpeta de
@@ -156,8 +163,8 @@ capturas de carrera es el tutorial del propio juego para manejar con control. M�
   conserva al actualizar.
 - **Menú de depuración** (ZL + ZR + Menos), cuatro páginas que cambias con L / R: rendimiento (límite
   de FPS, VSync, relojes de CPU / GPU / memoria, el impulso al cargar), gráficos (nivel de detalle,
-  efectos de celulares, antialiasing, filtrado de texturas, resolución 3D, contador de FPS), controles
-  y sonido (inclinación para girar, volumen) e información en vivo (relojes, temperaturas, batería,
+  efectos de celulares, antialiasing, filtrado anisotrópico, resolución 3D, contador de FPS), controles
+  y sonido (inclinación para girar, vibración, volumen) e información en vivo (relojes, temperaturas, batería,
   tiempos de carga).
 - **Tres cierres inesperados del juego original, corregidos** en el port.
 
@@ -181,7 +188,7 @@ capturas de carrera es el tutorial del propio juego para manejar con control. M�
 <img src="docs/images/install-steps.es.png" alt="Instalar en 4 pasos: descarga el zip, copia la carpeta switch a la SD, agrega tu APK y tu OBB a la carpeta game, abre con R + cualquier juego" width="100%">
 
 1. **Descarga.** En la página de [Releases](../../releases), en la sección **Assets**,
-   descarga `NFSMostWanted2012-0.3.1.zip` (no "Source code", que es solo para desarrolladores) y
+   descarga `NFSMostWanted2012-0.3.2.zip` (no "Source code", que es solo para desarrolladores) y
    descomprímelo en tu computadora.
 2. **Copia a la SD.** Copia la carpeta `switch` del zip a la raíz de tu tarjeta SD.
 3. **Agrega tu juego.** Copia tu APK y tu OBB en `switch/NFSMostWanted2012/game/`. No los
@@ -201,7 +208,7 @@ capturas de carrera es el tutorial del propio juego para manejar con control. M�
 
 ```
 sd:/switch/NFSMostWanted2012/
-├── NFSMostWanted2012-0.3.1.nro   el port
+├── NFSMostWanted2012-0.3.2.nro   el port
 ├── README.txt                    la guía del jugador (en inglés)
 ├── LICENSES.txt                  componentes de código abierto y sus licencias
 ├── game/                         TUS archivos del juego (nunca los compartas)
@@ -304,7 +311,10 @@ se guardan al momento en `settings.ini`.
 | Conectar o sacar del dock mientras juegas | 🧪 Nuevo en la 0.3.0: la resolución cambia al momento. Se agradecen comentarios |
 | FPS | ⚠️ Todavía en ajuste en consola real: el juego apunta a 30 FPS, y en carreras con mucha acción puede bajar de eso con los relojes de fábrica. El menú de depuración permite subir el reloj de la CPU. La 0.2.6 y la 0.2.7 quitan las causas principales de los tirones cortos encontradas hasta ahora. |
 | Cargas | ✅ Más rápidas desde la 0.2.7, sobre todo desde la segunda vez que lo abres (la caché JIT). 🧪 La 0.3.1 agrega el impulso de CPU al cargar: aún sin medir en una consola |
-| Efectos de celulares, antialiasing, filtrado de texturas | 🧪 Nuevo en la 0.3.1: funciona en la versión de prueba para PC, aún sin probar en una consola |
+| Efectos de celulares, antialiasing, filtrado anisotrópico | 🧪 Nuevo en la 0.3.1: funciona en la versión de prueba para PC, aún sin probar en una consola |
+| Vibración | 🧪 Nuevo en la 0.3.2: los choques, comprobados en la versión de prueba para PC; falta confirmar cómo se siente en cada control |
+| Los 11 idiomas (también ruso, japonés, coreano y chino) | ✅ Se leen desde la 0.3.2 (versión de prueba para PC); 🧪 falta confirmar las fuentes de la consola |
+| Jugar en el dock durante muchos eventos | 🧪 La 0.3.2 corrige el mapa que dejaba de cargar después de unos eventos ([#1](../../issues/1)): falta confirmarlo en una consola |
 | Giroscopio, relojes personalizados | 🧪 Nuevo, aún sin confirmar en muchas consolas: se agradecen comentarios |
 | Funciones en línea (Autolog, clasificaciones, cuenta EA, tienda) | ❌ No disponibles: el port no usa internet a propósito |
 
@@ -325,6 +335,9 @@ consolas. Los reportes de más consolas son los que más ayudan, en español o e
 | 🔌 **Poner y sacar del dock mientras juegas** (nuevo en la 0.3.0) | En una Switch o Switch OLED, pon la consola en el dock y sácala durante una carrera y en los menús. ¿La imagen se ve bien? |
 | ⏱️ **Tiempos de carga** (nuevo en la 0.3.1) | La CPU ahora funciona a 1785 MHz mientras el juego carga. `log.txt` tiene una línea `loading screen: ... s` por cada pantalla de carga: ¿cuánto duran las tuyas? |
 | ✨ **Antialiasing y efectos de celulares** (nuevo en la 0.3.1) | Activa el antialiasing (menú de depuración → GRAPHICS) y juega un poco, en portátil y en el dock si puedes: ¿los FPS se mantienen en 30? |
+| 📳 **Vibración** (nuevo en la 0.3.2) | Choca contra una pared y luego usa el nitro: ¿el control vibra, y se siente bien (portátil, Joy-Con, Pro Controller)? |
+| 🗺️ **En el dock, varios eventos** (nuevo en la 0.3.2) | En el dock, juega tres o cuatro eventos seguidos y vuelve al mapa entre ellos: ¿el mapa sigue cargando? `log.txt` ahora muestra la memoria del juego. |
+| 🖼️ **Ícono en un forwarder** (nuevo en la 0.3.2) | Después de abrir la 0.3.2 por primera vez, crea un forwarder: ¿muestra el ícono del juego y el título "NFS Most Wanted 2012"? |
 | 🏎️ **FPS** | Activa el contador de FPS en el menú de depuración (ZL + ZR + Menos) y juega algunas carreras. Las líneas `perf:` de `log.txt` dicen qué limita los FPS. |
 | 🪟 **Reflejos** | Si las ventanas de los edificios se ven mal en tu consola, una foto ayuda. |
 | 🌍 **Idiomas** | Si un texto todavía dice MOGA, o el + y el − se ven mal en tu idioma, una captura ayuda. |
@@ -419,8 +432,11 @@ portátil y un control cuando está en el dock.
 <details>
 <summary><b>¿El Homebrew Menu puede mostrar el ícono real del juego?</b></summary>
 
-Sí, en tu propia copia: usa en una PC el script opcional `prepare_sd.py` que viene en la descarga,
-con la opción `--nro` (está en la [guía de instalación](docs/INSTALL.es.md#opcional-el-script-para-pc)). El `.nro` publicado nunca trae imágenes de EA.
+Sí, en tu propia copia, solo desde la 0.3.2: la primera vez, el port saca el ícono de tu APK y lo
+pone, con el título "NFS Most Wanted 2012", en el `.nro`. Si usas un forwarder, créalo después de esa
+primera vez, y otra vez después de cada actualización (cada versión tiene su propio `.nro`). El `.nro`
+publicado nunca trae imágenes de EA. El script opcional `prepare_sd.py` hace lo mismo en una PC con
+`--nro` (está en la [guía de instalación](docs/INSTALL.es.md#opcional-el-script-para-pc)).
 </details>
 
 <details>
@@ -487,7 +503,7 @@ cmake -B build-switch -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake -DCMA
 cmake --build build-switch -j
 ```
 
-El resultado es `build-switch/NFSMostWanted2012-0.3.1.nro`. Los detalles están en
+El resultado es `build-switch/NFSMostWanted2012-0.3.2.nro`. Los detalles están en
 [docs/BUILDING.md](docs/BUILDING.md) (en inglés).
 
 ## Apoyo
@@ -507,7 +523,7 @@ Gracias a quienes hicieron posible este proyecto:
   [**devkitPro**](https://devkitpro.org) (devkitA64, switch-tools, switch-mesa) y
   [**Atmosphère**](https://github.com/Atmosphere-NX/Atmosphere).
 - [**Mesa**](https://mesa3d.org) y **libdrm_nouveau**, para OpenGL ES en la GPU de la Switch.
-- [**stb**](https://github.com/nothings/stb) de Sean Barrett (dibujo de texto, descompresión del APK).
+- [**stb**](https://github.com/nothings/stb) de Sean Barrett (dibujo de texto, descompresión del APK, el ícono de tu APK).
 - **Barlow Condensed** de Jeremy Tribby (licencia SIL Open Font), usada en el banner y el ícono.
 
 La lista completa con licencias está en [THIRD_PARTY.md](THIRD_PARTY.md).

@@ -35,10 +35,16 @@ FEATURES
   * The whole game is playable with the controller: driving, and every menu
     with a highlight you move with the D-pad. The touch screen still works.
   * Optional gyro steering: tilt the console or controller like a wheel.
+  * Vibration: a thump for every crash (stronger for a hard one) and a
+    buzz while you use nitro. Off, low, normal or strong.
+  * All 11 of the game's languages, Russian, Japanese, Korean and Chinese
+    included (the letters come from the Switch's own fonts).
+  * The game's icon and title on your copy (taken from your APK at the
+    first start), also on a forwarder made after that.
   * Debug menu (ZL + ZR + Minus), four pages: performance (clocks, CPU boost
-    while loading), graphics (detail level, anti-aliasing, texture
-    filtering), controls & sound (tilt steering, volume) and live
-    information (frame rate, temperatures, battery, loading times).
+    while loading), graphics (detail level, anti-aliasing, anisotropic
+    filtering), controls & sound (tilt steering, vibration, volume) and
+    live information (frame rate, temperatures, battery, loading times).
   * Online services are blocked: the game runs fully offline.
   * Your progress is kept in save/ and survives updates of the port.
 
@@ -58,6 +64,7 @@ THE FOLDER
   |                         At the first start the port takes these out of it:
   |     lib/                the game's 5 libraries (lib/armeabi-v7a/ in the APK)
   |     assets/             the APK's assets/ folder
+  |     icon.jpg            the game's icon from your APK (put on the .nro)
   +-- save/                 what the game saves (back it up from time to time):
   |     progress/           your career: nfstr_save.sb holds your money (SP),
   |                         reputation and Most Wanted rank, cars and upgrades,
@@ -119,7 +126,13 @@ STARTING THE GAME
 -----------------
 Hold R while you start any game on the console. The Homebrew Menu opens with
 the full memory of a game (title-takeover mode). Choose
-"NFS Most Wanted 2012 Loader" (by SantiBros, version @VERSION@).
+"NFS Most Wanted 2012 Loader" (by SantiBros, version @VERSION@). After its
+first start it shows the game's icon and is called "NFS Most Wanted 2012".
+
+A forwarder (an icon on the HOME menu that starts the .nro): make it after
+the port has started once, so it gets the game's icon and title. Each
+version has a new .nro file name and removes the old one, so make the
+forwarder again after each update, once the new version has started.
 
 Do not start it from the Homebrew Menu in the Album: there, homebrew only gets
 about 440 MB of memory, which is not enough for the game.
@@ -165,6 +178,8 @@ UPDATING
      the new version removes the old .nro itself the first time it starts.
      Your progress is not in the .nro: it stays in save/.
   3. Replace source/ with the new one too, if you keep it.
+  4. If you use a forwarder, make it again after the new version's first
+     start (the .nro has a new name, and the icon goes into it then).
 
 Coming from the folder switch/NFSMostWanted/ (the port's folder before it was
 renamed in 0.2.0, to tell it apart from the Most Wanted (2005) port), or from a
@@ -239,6 +254,28 @@ When you report a problem, attach log.txt from this folder.
 
 WHAT'S NEW
 ----------
+0.3.2
+  * Vibration: a thump for every crash (light, medium or hard, as the game
+    itself rates it) and a buzz while you use nitro. Debug menu, CONTROLS &
+    SOUND: off, low, normal (default) or strong.
+  * Russian, Japanese, Korean and Chinese text was blank: the game's font
+    only has Latin letters. The port now takes the missing letters from the
+    Switch's own fonts, so all 11 languages can be read.
+  * Your copy shows the game's icon and the title "NFS Most Wanted 2012" in
+    the Homebrew Menu, and on a forwarder made after the first start. The
+    icon comes from your own APK; the port itself ships none.
+  * Docked, the map could stop loading after a few events, and entering an
+    event then crashed. Docked, the game loads its menu and map pictures in
+    their biggest size, 58 to 67 MB each, two or three at a time, and frees
+    them a moment later. The port now keeps such big blocks away from the
+    game's other data, as Android does, so the free memory stays in one
+    piece. Not yet confirmed on a console: if it still happens, please send
+    log.txt (it now shows the game's memory every 10 seconds).
+  * The port now frees the Java objects the game no longer uses (until now
+    none was ever freed).
+  * "Texture filtering" is now called "Anisotropic filtering", its usual
+    name. Your setting is kept.
+
 0.3.1
   * Fixed: after a long session (about an hour, sooner when browsing many
     cars), cars stopped appearing in the garage and the next race stayed on

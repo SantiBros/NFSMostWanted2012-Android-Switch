@@ -16,6 +16,7 @@ namespace game::prefs {
 enum Quality : int { kQualityHighest = 0, kQualityHigh, kQualityMedium, kQualityLow };
 enum Overlay : int { kOverlayOff = 0, kOverlayFps, kOverlayFull };
 enum Effects : int { kEffectsGame = 0, kEffectsHigh, kEffectsHighest };
+enum Vibration : int { kVibrationOff = 0, kVibrationLow, kVibrationNormal, kVibrationStrong };
 // Clock settings, in kHz. Special values:
 constexpr int kClockStock = 0;  // whatever the console's own profile uses
 constexpr int kClockAuto = -1;  // GPU only: 460.8 MHz handheld, stock docked
@@ -49,6 +50,9 @@ struct Values {
     // extra objects: kEffectsGame = as the detail level has them.
     int effects = kEffectsHigh;
     int overlay = kOverlayOff;
+    // Vibration (0.3.2): the controller rumbles with the game's camera shakes
+    // (crashes, takedowns, nitro...). Changes live.
+    int vibration = kVibrationNormal;
     // FMOD master volume in percent (50-100). At 100 the game's mix goes past
     // the 16-bit limit at loud moments (up to 1.8x full scale in a race) and is
     // cut off; at 70 it hardly ever does.

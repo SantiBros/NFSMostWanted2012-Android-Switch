@@ -3,6 +3,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "core/common.h"
 
@@ -145,5 +146,22 @@ bool system_status(SystemStatus& out);
 // One line for log.txt about the system the port runs on: firmware, how it
 // was started, the memory it may use ("" if nothing to say).
 std::string system_info();
+
+// Fonts for text the game's own fonts cannot show (0.3.2): Switch: the shared
+// system fonts; desktop: NFSMW_FALLBACK_FONTS ("file[#index]=tag,...") or the
+// Noto CJK / Droid fallback fonts when installed. The data stays valid for the
+// whole run. tag: "ja", "ko", "zh-hans", "zh-hant" or "any".
+struct FontBlob {
+    const unsigned char* data = nullptr;
+    size_t size = 0;
+    int index = 0;  // font in a collection (.ttc)
+    std::string tag, name;
+};
+const std::vector<FontBlob>& fallback_fonts();
+
+// Vibration (0.3.2): the controller in use (handheld, Joy-Con or Pro
+// Controller) rumbles at these strengths, 0..1, until the next call. `low` is
+// a deep thump (around 100 Hz), `high` a buzz (around 300 Hz). 0, 0 stops it.
+void set_rumble(float low, float high);
 
 }  // namespace platform

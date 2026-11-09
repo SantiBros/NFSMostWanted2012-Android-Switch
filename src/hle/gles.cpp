@@ -792,8 +792,47 @@ void m_glActiveTexture(u32 unit) {
     g_unit_tracked = u + 1;
     glq::call(p, unit);
 }
+// Live textures and the size of their images (all mip levels as uploaded), for
+// the perf line in log.txt: a count that keeps growing between events would
+// mean textures are never deleted.
+namespace texmem {
+std::mutex g_mu;
+std::unordered_map<u32, std::unordered_map<u32, u64>> g_bytes;  // id -> level -> bytes
+u64 g_total = 0;
+void bound(u32 id) {
+    if (!id) return;
+    std::lock_guard lk(g_mu);
+    g_bytes.try_emplace(id);
+}
+void image(u32 id, u32 level, u64 bytes) {
+    if (!id) return;
+    std::lock_guard lk(g_mu);
+    u64& b = g_bytes[id][level];
+    g_total += bytes - b;
+    b = bytes;
+}
+void erase(u32 id) {
+    std::lock_guard lk(g_mu);
+    auto it = g_bytes.find(id);
+    if (it == g_bytes.end()) return;
+    for (auto& [lvl, b] : it->second) g_total -= b;
+    g_bytes.erase(it);
+}
+u32 bytes_per_pixel(u32 fmt, u32 type) {
+    if (type == 0x8363 || type == 0x8033 || type == 0x8034) return 2;  // 565, 4444, 5551
+    const u32 per = type == 0x1406 ? 4 : type == 0x140B || type == 0x8D61 ? 2 : 1;  // float, half float
+    switch (fmt) {
+    case 0x1908: return 4 * per;  // RGBA
+    case 0x1907: return 3 * per;  // RGB
+    case 0x190A: return 2 * per;  // LUMINANCE_ALPHA
+    default: return per;          // ALPHA, LUMINANCE, depth...
+    }
+}
+}  // namespace texmem
+
 void m_glBindTexture(u32 target, u32 tex) {
     LOAD(glBindTexture);
+    texmem::bound(tex);
     GL_TRACE("glBindTexture");
     if (target == GL_TEXTURE_2D) {
         if (g_filter && scene::g_bound_tex[scene::g_unit] == tex) FILTERED();
@@ -811,6 +850,7 @@ void m_glDeleteTextures(s32 n, u32 ids) {
         u32 id = mem::r32(ids + i * 4);
         scene::g_tex.erase(id);
         aniso::g_mip.erase(id);
+        texmem::erase(id);
         game::controller_art::forget_texture(id);
         for (u32& b : scene::g_bound_tex)
             if (b == id) b = 0;
@@ -860,6 +900,7 @@ void etc1_scan(u32 w, u32 h, u32 size, u32 data) {
 void f_glCompressedTexImage2D(u32 target, u32 level, u32 ifmt, u32 w, u32 h, u32 border, u32 size, u32 data) {
     if (level == 0) note_texture_format(ifmt, 0, (s32)w, (s32)h, true);
     if (ifmt == 0x8D64) etc1_scan(w, h, size, data);
+    if (target == GL_TEXTURE_2D) texmem::image(scene::g_bound_tex[scene::g_unit], level, size);
     g_glCompressedTexImage2D(target, level, ifmt, w, h, border, size, data);
 }
 using TexImageFn = void (*)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*);
@@ -868,6 +909,8 @@ void m_glTexImage2D(u32 target, s32 level, s32 ifmt, s32 w, s32 h, s32 border, u
     if (!p_tex_image) p_tex_image = (TexImageFn)gl_proc("glTexImage2D");
     GL_TRACE("glTexImage2D");
     if (level == 0 && px) note_texture_format(fmt, type, w, h, false);
+    if (target == GL_TEXTURE_2D && w > 0 && h > 0)
+        texmem::image(scene::g_bound_tex[scene::g_unit], (u32)level, (u64)w * (u64)h * texmem::bytes_per_pixel(fmt, type));
     if (target == GL_TEXTURE_2D && level == 0) {
         u32 id = scene::g_bound_tex[scene::g_unit];
         if (scene::screen_sized(w, h))
@@ -1311,6 +1354,11 @@ u32 h_eglGetProcAddress(u32 name) {
 }  // namespace
 
 u64 gl_call_count() { return g_calls.load(); }
+void texture_stats(u64& count, u64& bytes) {
+    std::lock_guard lk(texmem::g_mu);
+    count = texmem::g_bytes.size();
+    bytes = texmem::g_total;
+}
 u64 gl_filtered_count() { return g_filtered; }
 void gl_flush_state() { flush_attribs(); }
 void gl_client_stats(u64& draws, u64& attribs, u64& index_draws) {

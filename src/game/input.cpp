@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 #include <mutex>
 #include <string>
@@ -125,7 +126,10 @@ void register_java() {
     using jni::def;
     const char* C = "com/bda/controller/Controller";
     def(C, "getInstance", "(Landroid/content/Context;)Lcom/bda/controller/Controller;", [](Call&) {
-        if (!g_controller) g_controller = jni::new_object("com/bda/controller/Controller");
+        if (!g_controller) {
+            g_controller = jni::new_object("com/bda/controller/Controller");
+            jni::pin(g_controller);
+        }
         return V::L(g_controller);
     });
     def(C, "init", "()Z", [](Call&) { return V::Z(true); });
@@ -134,6 +138,7 @@ void register_java() {
     def(C, "onResume", "()V", [](Call&) { return V{}; });
     def(C, "setListener", "(Lcom/bda/controller/ControllerListener;Landroid/os/Handler;)V", [](Call& c) {
         g_listener = c.l(0);
+        jni::pin(g_listener);
         LOGI("MOGA listener registered: controller input enabled");
         return V{};
     });
@@ -438,7 +443,11 @@ void deliver(const platform::InputState& s) {
     }
     for (auto& m : kMap) {
         bool now = s.buttons & m.button, before = g_prev.buttons & m.button;
-        if (now != before) send_key(m.key, now);
+        if (now != before) {
+            static const bool log = std::getenv("NFSMW_INPUT_LOG") != nullptr;
+            if (log) LOGI("input: key %d %s", m.key, now ? "down" : "up");
+            send_key(m.key, now);
+        }
     }
     if (s.lx != g_prev.lx || s.ly != g_prev.ly || s.rx != g_prev.rx || s.ry != g_prev.ry || s.lt != g_prev.lt ||
         s.rt != g_prev.rt)
@@ -499,6 +508,8 @@ void pump() {
     bool menus = game::ui::active() && !game::ui::is_racing() && !g_nav_disabled;
     if (menus != g_nav_mode) {
         g_nav_mode = menus;
+        static const bool log = std::getenv("NFSMW_INPUT_LOG") != nullptr;
+        if (log) LOGI("input: %s", menus ? "menus (D-pad and A move the highlight)" : "racing (every button to the game)");
         if (!menus) game::ui::clear_focus();
     }
     platform::InputState s = raw;  // what the game gets to see

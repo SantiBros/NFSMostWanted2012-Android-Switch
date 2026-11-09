@@ -46,7 +46,8 @@ frames. `NFSMW_DUMP_EVERY=N` prints what every game thread is waiting on. `NFSMW
 every Java call the game makes.
 `NFSMW_CONTROL=<dir>` drives the game interactively: commands appended to `<dir>/cmd.txt`
 (`press A`, `press ZL+ZR+MINUS`, `tap x y`, `rstick 0 -1 20`, `tilt 30`, `wait 30`, `shot name`,
-`cmd dumpui`, `cmd fbtrace`) run one after another. `tilt` simulates the motion sensor, in degrees;
+`cmd dumpui`, `cmd fbtrace`) run one after another; `with <command>` runs a command together
+with the next one (`with press A 40` then `stick 1 0 40`: drift while steering). `tilt` simulates the motion sensor, in degrees;
 `cmd dumpui` logs every button on screen with its name and position; `cmd fbtrace` logs the
 framebuffers and viewports of the next two frames.
 Profiling: `cmd profile` logs, for 200 frames of the main thread, the time and number of every
@@ -77,6 +78,17 @@ functions in the `host calls` part of a loading thread's log line.
 `NFSMW_THREAD_LIMIT=96` refuses new threads past that number, as the Switch does, and
 `NFSMW_NO_THREAD_REAP=1` never releases detached threads, as up to 0.3.0 on the Switch: together
 they reproduce the 0.3.0 garage bug on the desktop (a car that never loads after enough loads).
+0.3.2: `NFSMW_RUMBLE_LOG=1` logs the vibration (each camera shake, the crash level it matched,
+the nitro gauge, every change sent to the controller); `NFSMW_INPUT_LOG=1` logs each button the
+game receives and every switch between menus and racing; `NFSMW_GC_LOG=1` logs every pass of the
+Java object collector (`NFSMW_NO_JNI_GC=1` turns it off); `NFSMW_FALLBACK_FONTS="file[#index]=tag,..."`
+chooses the fonts for letters the game's fonts lack (tags `ja`, `ko`, `zh-hans`, `zh-hant`, `any`;
+the default is Noto Sans CJK and Droid Sans Fallback when installed); `NFSMW_TEST_NRO=<file>`
+puts the game's icon and title into that `.nro` instead of the running one, and
+`NFSMW_NO_ICON=1` leaves the `.nro` alone. `NFSMW_PROBE=<off>,<off>...` logs every call of those
+`libapp.so` functions (each must start with `push {...}` / `add fp, sp, #n`), with
+`NFSMW_PROBE_ONCE=1` (each function and `r0` once) and `NFSMW_PROBE_DUMP=<words>` (the first words
+at `r0`).
 `-DNFSMW_SWITCH_TEST=ON` builds with the Switch memory/JIT model. The ARM64 cross build
 (`cmake/aarch64-linux.cmake`, `-DNFSMW_NO_GL=ON`) runs under `qemu-aarch64`.
 

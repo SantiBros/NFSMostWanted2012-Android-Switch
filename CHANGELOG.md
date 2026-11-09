@@ -2,6 +2,57 @@
 
 All notable changes to the port. The release zip's `README.txt` carries the same list.
 
+## [0.3.2]
+
+### Added
+- **Vibration** (debug menu CONTROLS & SOUND, `vibration=off|low|normal|strong`, normal by
+  default). The Android game never vibrates; the port now rumbles the controller in use
+  (handheld, Pro Controller, Joy-Con) with two things the game already does. Each crash of
+  your car gives a thump: the game picks a light, medium or hard camera shake for it, and the
+  port matches that against the game's own three levels, so a scrape is a tap and a head-on
+  hit is a jolt. While you use nitro there is a steady buzz (from the HUD's nitro gauge
+  going down). It stops in the HOME menu and while the debug menu is open; changing the
+  setting gives a short test pulse.
+- **The game's icon and title on your copy of the port** ([issue #3](../../issues/3)). The
+  released `.nro` keeps the port's own plain icon (no EA artwork is shipped). At the first
+  start the port takes the icon out of your APK, keeps it as `game/icon.jpg`, and writes it
+  into the `.nro` together with the title "NFS Most Wanted 2012". The Homebrew Menu shows it
+  from then on, and a **forwarder made from the `.nro` after that first start** shows the
+  game's icon and full title. A forwarder made before keeps the old icon until you make it
+  again. `tools/prepare_sd.py --nro` does the same on a computer.
+
+### Fixed
+- **Docked, the map stopped loading after a few events, then entering an event crashed**
+  ([issue #1](../../issues/1), docked, started from a forwarder). Docked, the game picks its
+  biggest menu and map pictures and loads each texture pack whole: blocks of 58 to 67 MiB, two or
+  three alive at once (up to about 250 MiB) and freed a moment later. The port's heap for the game
+  (1 GiB on the console) gave them whatever gap fitted best, between the game's long-lived data,
+  so the free memory broke up a little more on every visit to the map. Big blocks (1 MiB and up)
+  now come from the top of the heap and everything else from the bottom, as Android's own malloc
+  keeps such blocks in separate mappings, so the space they leave joins up again. Without the
+  report's `log.txt` this is the most likely cause found on the PC test build at 1080p, not yet
+  confirmed on a console; the next `log.txt` will show it either way (see Changed).
+- **Java objects the game no longer used were never freed.** There is no Java VM in the port,
+  and its stand-in kept every object the game made (and the game draws every text into a new
+  bitmap). They are now freed as JNI defines it (local and global references, a mark-and-sweep
+  pass between frames). A slow leak (about 4 MiB in ten minutes at 1080p), but a real one.
+- **Russian, Japanese, Korean and Chinese were blank** ([issue #2](../../issues/2)). The
+  game draws its text with its own font, which only has Latin letters; on a phone, Android
+  fills in the missing letters from the system's fonts, and the port had nothing to fill
+  them with. It now uses the Switch's own system fonts (the ones the HOME menu uses) for any
+  letter the game's font lacks: the language list shows Русский, 日本語, 한국어 and 简体中文,
+  and the game's text shows up in those languages.
+
+### Changed
+- **Texture filtering is now called Anisotropic filtering** (debug menu GRAPHICS,
+  `anisotropic_filtering=`), its usual name. Same options (off, 2x to 16x) and the same
+  default (4x); a `settings.ini` from 0.3.1 keeps its choice.
+- `log.txt`: the `perf:` lines also show the game's own memory (`game heap 47 MiB in use, 88 of
+  1024 MiB taken, largest free 886 MiB`), the Java objects the port keeps for the game and the
+  game's textures (`GL textures 15 (146 MiB)`); every block of 16 MiB or more the game asks for
+  gets a line with the largest free block left, and an allocation that fails says how much was
+  in use and free. A report then shows whether, and how, the game ran short of memory.
+
 ## [0.3.1]
 
 ### Added

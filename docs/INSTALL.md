@@ -101,11 +101,24 @@ a damaged file, or not enough free space.
 ## Starting the game
 
 Hold **R** while you launch **any game** on the HOME menu. The Homebrew Menu opens with the full
-memory of a game (*title takeover*). Choose **NFS Most Wanted 2012 Loader** (by SantiBros).
+memory of a game (*title takeover*). Choose **NFS Most Wanted 2012 Loader** (by SantiBros). From
+0.3.2 on, after its first start it shows the game's icon and is called **NFS Most Wanted 2012**.
 
 > [!WARNING]
 > Don't start it from the Homebrew Menu in the **Album**: there, homebrew only gets about 440 MB of
 > memory, which is not enough for the game. The port shows a message if you try.
+
+### A forwarder on the HOME menu
+
+A forwarder is an icon on the HOME menu that starts the `.nro` directly; you make it from the
+`.nro` file with a forwarder tool. Make it **after the port has started once**: at its first
+start the port puts the game's icon (taken from your APK, it is never shipped with the port) and
+the title "NFS Most Wanted 2012" into the `.nro`, and the forwarder copies both from there. A
+forwarder made earlier shows the port's plain icon until you make it again.
+
+Each version has its own file name (`NFSMostWanted2012-<version>.nro`) and removes the older
+`.nro` at its first start, so **make the forwarder again after each update**, once the new
+version has started.
 
 The game runs at **1280×720** in handheld mode and **1920×1080** when docked. Since 0.3.0 you can
 dock or undock while playing: the port switches to the new resolution right away (with a short
@@ -123,7 +136,8 @@ sd:/switch/NFSMostWanted2012/
 │   ├── <your APK>.apk                can be deleted after the first start
 │   ├── lib/                          libapp.so, libc++_shared.so, libfmodex.so,
 │   │                                 libfmodevent.so, libNimble.so
-│   └── assets/                       the APK's assets
+│   ├── assets/                       the APK's assets
+│   └── icon.jpg                      the game's icon from your APK (put on the .nro)
 ├── save/
 │   ├── progress/                     your career: nfstr_save.sb
 │   └── settings/                     the game's own settings: language, version, agreement
@@ -144,6 +158,8 @@ from. `source/` can be deleted if you need the space.
    (never a newer one). You can also delete the old `.nro` yourself: with two `.nro` files in the
    folder, the Homebrew Menu shows both.
 3. Replace `source/` with the new one too, if you keep it.
+4. If you use a forwarder, make it again after the new version's first start (see
+   [A forwarder on the HOME menu](#a-forwarder-on-the-home-menu)).
 
 **Coming from 0.1.0 to 0.2.0** (folder `switch/NFSMostWanted/`) or from a test version
 (`switch/nfsmw/`): just copy the new `switch` folder and start **NFS Most Wanted 2012 Loader**. The

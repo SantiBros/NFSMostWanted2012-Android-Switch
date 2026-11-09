@@ -48,6 +48,10 @@ struct Object {
     std::unordered_map<std::string, Value> fields;
     std::shared_ptr<void> native;             // host payload for special classes
     Class* as_class = nullptr;                // set for java.lang.Class objects
+    bool owns_data = false;                   // `data` is a guest heap block freed with the object
+    bool pinned = false;                      // never collected (held by the port's C++ code)
+    bool marked = false;                      // garbage collection: reachable in this pass
+    u32 born = 0;                             // garbage collection pass it was created in
 };
 
 struct Call {
@@ -121,5 +125,35 @@ Value call_native(const std::string& cls, const std::string& name, const std::st
 
 // Implemented in java_classes.cpp
 void register_java_classes();
+
+// ---- object lifetime (0.3.2) ----------------------------------------------------
+// Until 0.3.1 no Java object was ever freed: DeleteLocalRef/DeleteGlobalRef did
+// nothing, and every array and every text bitmap kept its block of the game's
+// heap for good. The game draws each piece of text (map labels, event cards,
+// menus) into a new bitmap, so after a few events the game's own allocations
+// started to fail (map textures missing, then a crash). Objects are now
+// reference counted the way JNI defines it (global refs until DeleteGlobalRef,
+// local refs until DeleteLocalRef or the end of the native call that got them)
+// and a mark-and-sweep pass frees the ones nothing can reach any more.
+//
+// pin(): keep an object for the whole run (the port's C++ code holds it).
+void pin(jref r);
+// An object was given `bytes` of the game's heap that it frees when collected
+// (Object::owns_data); counts towards starting the next pass.
+void note_alloc(u64 bytes);
+// Once per frame on the main thread, between frames: frees unreachable
+// objects when enough new ones were made since the last pass. `force` runs a
+// pass now (tests).
+void collect_garbage(bool force = false);
+// A guest thread ends: its local references go away.
+void thread_ended(u32 thread_id);
+struct GcStats {
+    u64 objects = 0;          // objects alive now
+    u64 data_bytes = 0;       // game heap they own (arrays, bitmaps)
+    u64 freed_objects = 0;    // freed since the start
+    u64 freed_bytes = 0;
+    u32 passes = 0;
+};
+GcStats gc_stats();
 
 }  // namespace jni
