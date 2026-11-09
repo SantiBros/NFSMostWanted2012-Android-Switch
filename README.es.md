@@ -313,7 +313,8 @@ se guardan al momento en `settings.ini`.
 | Cargas | ✅ Más rápidas desde la 0.2.7, sobre todo desde la segunda vez que lo abres (la caché JIT). 🧪 La 0.3.1 agrega el impulso de CPU al cargar: aún sin medir en una consola |
 | Efectos de celulares, antialiasing, filtrado anisotrópico | 🧪 Nuevo en la 0.3.1: funciona en la versión de prueba para PC, aún sin probar en una consola |
 | Vibración | 🧪 Nuevo en la 0.3.2: los choques, comprobados en la versión de prueba para PC; falta confirmar cómo se siente en cada control |
-| Los 11 idiomas (también ruso, japonés, coreano y chino) | ✅ Se leen desde la 0.3.2 (versión de prueba para PC); 🧪 falta confirmar las fuentes de la consola |
+| Los 11 idiomas (también ruso, japonés, coreano y chino) | ✅ Se leen desde la 0.3.2, confirmado en una Switch Lite |
+| El ícono y el título del juego en tu copia | ✅ Nuevo en la 0.3.2, confirmado en una Switch Lite |
 | Jugar en el dock durante muchos eventos | 🧪 La 0.3.2 corrige el mapa que dejaba de cargar después de unos eventos ([#1](../../issues/1)): falta confirmarlo en una consola |
 | Giroscopio, relojes personalizados | 🧪 Nuevo, aún sin confirmar en muchas consolas: se agradecen comentarios |
 | Funciones en línea (Autolog, clasificaciones, cuenta EA, tienda) | ❌ No disponibles: el port no usa internet a propósito |

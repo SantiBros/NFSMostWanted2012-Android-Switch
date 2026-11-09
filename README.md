@@ -297,7 +297,8 @@ in `settings.ini`.
 | Loading | ✅ Faster since 0.2.7, most of all from the second start on (the JIT cache). 🧪 0.3.1 adds the CPU boost while loading: not yet measured on a console |
 | Phone effects, anti-aliasing, anisotropic filtering | 🧪 New in 0.3.1: working on the PC test build, not yet tried on a console |
 | Vibration | 🧪 New in 0.3.2: crashes checked on the PC test build; how it feels on each controller still to be confirmed |
-| All 11 languages (Russian, Japanese, Korean, Chinese included) | ✅ Readable since 0.3.2 (PC test build); 🧪 the console's fonts still to be confirmed |
+| All 11 languages (Russian, Japanese, Korean, Chinese included) | ✅ Readable since 0.3.2, confirmed on a Switch Lite |
+| The game's icon and title on your copy | ✅ New in 0.3.2, confirmed on a Switch Lite |
 | Docked play over many events | 🧪 0.3.2 fixes the map that stopped loading after a few events ([#1](../../issues/1)): to be confirmed on a console |
 | Gyro steering, custom clocks | 🧪 New, not yet confirmed on many consoles: feedback welcome |
 | Online features (Autolog, leaderboards, EA account, store) | ❌ Not available: the port is offline by design |

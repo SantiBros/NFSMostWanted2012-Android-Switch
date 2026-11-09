@@ -93,8 +93,8 @@ Tested on the desktop build with the original 1.3.128 APK and OBB:
 | Debug menu pages, temperature and battery (0.3.1) | the pages checked on desktop; the temperatures and battery are read only on a console, not yet tried there |
 | Vibration from crashes (0.3.2) | working on desktop: crashes matched to the game's light / medium / hard shake and turned into rumble values (logged with `NFSMW_RUMBLE_LOG`); the HD rumble itself only on a console, not yet tried there |
 | Vibration from nitro (0.3.2) | the player's nitro gauge found and read on desktop; using nitro could not be tried there (the tutorial blocked it), not yet tried on a console |
-| Russian, Japanese, Korean and Chinese text (0.3.2) | working on desktop with Noto CJK in place of the console's fonts (the language list and menus checked in Japanese and Russian); the console's own fonts not yet tried |
-| The game's icon and title on the `.nro` (0.3.2) | working on desktop on a copy of the released `.nro` (icon, title in all 16 languages, RomFS intact); on the console not yet tried |
+| Russian, Japanese, Korean and Chinese text (0.3.2) | working on a Switch Lite with the console's own fonts, and on desktop with Noto CJK in their place (the language list and menus checked in Japanese and Russian) |
+| The game's icon and title on the `.nro` (0.3.2) | working on a Switch Lite, and on desktop on a copy of the released `.nro` (icon, title in all 16 languages, RomFS intact) |
 | Freeing unused Java objects (0.3.2) | working on desktop, also with a pass after every 150 new objects (`NFSMW_GC_OBJECTS=150`) through the map, events and the language menu |
 | Big blocks at the top of the heap (0.3.2) | working on desktop at 1080p with the console's 1 GiB heap; the docked map on a console after several events not yet confirmed |
 | 720p handheld / 1080p docked | working (1080p rendering checked on desktop) |
