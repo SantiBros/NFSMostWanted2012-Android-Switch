@@ -23,9 +23,7 @@ en una carpeta y corre por Fairhaven, en modo portátil o en el dock.
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/S4I32A0WMU)
 
-**🏁 ¡Gracias por las 1000 descargas!**<br>
-A todos los que jugaron el port, lo probaron en su consola, reportaron un error con su `log.txt`
-o lo compartieron con otros: gracias. Este port sigue mejorando gracias a ustedes.
+<img src="docs/images/thanks-1000.es.jpg" width="100%" alt="Un logro de la comunidad: 1000 descargas. ¡Gracias! A todos los que jugaron el port, lo probaron en su consola, reportaron un error con su log.txt o lo compartieron: este logro es de ustedes.">
 
 </div>
 
