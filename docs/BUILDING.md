@@ -81,7 +81,10 @@ they reproduce the 0.3.0 garage bug on the desktop (a car that never loads after
 0.3.2: `NFSMW_RUMBLE_LOG=1` logs the vibration (each camera shake, the crash level it matched,
 the nitro gauge, every change sent to the controller); `NFSMW_INPUT_LOG=1` logs each button the
 game receives and every switch between menus and racing; `NFSMW_GC_LOG=1` logs every pass of the
-Java object collector (`NFSMW_NO_JNI_GC=1` turns it off); `NFSMW_FALLBACK_FONTS="file[#index]=tag,..."`
+Java object collector (`NFSMW_NO_JNI_GC=1` turns it off, `NFSMW_GC_OBJECTS=<n>` runs a pass after
+every n new objects instead of 4000); `NFSMW_GUEST_MIB=1280` gives the game's heap only as much
+room as on the console, and `NFSMW_HEAP_BEST_FIT=1` places big blocks as up to 0.3.1 (see
+TECHNICAL.md, Big blocks at the top of the heap); `NFSMW_FALLBACK_FONTS="file[#index]=tag,..."`
 chooses the fonts for letters the game's fonts lack (tags `ja`, `ko`, `zh-hans`, `zh-hant`, `any`;
 the default is Noto Sans CJK and Droid Sans Fallback when installed); `NFSMW_TEST_NRO=<file>`
 puts the game's icon and title into that `.nro` instead of the running one, and
